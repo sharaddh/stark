@@ -5,27 +5,23 @@ const connectDB = require("./config/db");
 const multer = require("multer");
 const dns = require( 'dns');
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 
-// Connect to DB
 connectDB();
 dns.setServers(['0.0.0.0', '8.8.4.4']);   
-// Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Allowed CORS origins
 const allowedOrigins = [
   "https://starkk.shop",
-  "http://localhost:5173",
+  // "http://localhost:5173",
+  "http://localhost:5174",
   "https://starkk.netlify.app",
   "https://stark-gamma.vercel.app"
 ];
 
-// CORS middleware
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -37,7 +33,7 @@ app.use(cors({
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  maxAge: 86400 // Cache preflight response for 24 hours
+  maxAge: 43200
 }));
 
 // Optional: Explicit handling of OPTIONS requests (preflight)
@@ -66,7 +62,6 @@ app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/seller/auth", sellerAuthRoutes);
 app.use("/api/categories", categoryRoutes);
 
-// Handle undefined routes
 app.use("*", (req, res) => {
   res.status(404).json({ message: "API route not foundd" });
 });

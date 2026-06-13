@@ -5,23 +5,23 @@ const userSchema = new mongoose.Schema(
   {
     phoneNumber: {
       type: String,
-      required: [true, 'Phone number is required'],
-      unique: true,
-      trim: true,
       match: [/^\+?[1-9]\d{1,14}$/, 'Please provide a valid phone number'],
+      required: [true, 'Phone number is required'],
+      trim: true,
+      unique: true,
     },
     email: {
-      type: String,
+      trim: true,
       unique: true,
       sparse: true,
-      trim: true,
+      type: String,
       lowercase: true,
       match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please provide a valid email'],
     },
-    firstName: { type: String, trim: true },
-    lastName: { type: String, trim: true },
     dateOfBirth: { type: Date, default: null },
+    lastName: { type: String, trim: true },
     profilePicture: { type: String, trim: true },
+    firstName: { type: String, trim: true },
     bio: { type: String, trim: true, maxlength: [500, 'Bio cannot exceed 500 characters'] },
     role: {
       type: String,
@@ -31,11 +31,11 @@ const userSchema = new mongoose.Schema(
     },
     addresses: [
       {
+        postalCode: { type: String, trim: true, required: true },
+        country: { type: String, trim: true, default: 'India' },
         street: { type: String, trim: true, required: true },
         city: { type: String, trim: true, required: true },
         state: { type: String, trim: true, required: true },
-        postalCode: { type: String, trim: true, required: true },
-        country: { type: String, trim: true, default: 'India' },
       },
     ],
     cart: [

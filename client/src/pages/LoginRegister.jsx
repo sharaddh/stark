@@ -224,7 +224,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from '../axios';
+// useraxios, not '../axios': this page talks to /api/user/auth/*. The '../axios' instance
+// is the admin one -- it attaches adminToken and hard-redirects to /admin/login on any
+// 401/403, which would bounce a customer with a wrong PIN to the admin login page.
+import axios from '../useraxios';
 import { toast, Toaster } from 'react-hot-toast';
 import { Button } from '../../@/components/ui/button';
 import { Input } from '../../@/components/ui/input';

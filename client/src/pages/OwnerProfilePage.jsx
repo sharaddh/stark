@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from '../axios';
+// useraxios, not '../axios': these are public /api/user/auth/ endpoints. The '../axios'
+// instance redirects to /admin/login on any 401/403.
+import axios from '../useraxios';
 import toast, { Toaster } from 'react-hot-toast';
 import ProductCard from '../Components/ProductCard';
 import ProductCardSkeleton from '../Components/ProductCardSkeleton';

@@ -57,5 +57,5 @@ export const routes = [
   { path: '/seller/login', element: <SellerAuth />, layout: false },
   { path: '/seller/dashboard', element: <ProtectedRoute><SellerDashboard /></ProtectedRoute>, layout: false },
   { path: '/admin/login', element: <AdminAuth />, layout: false },
-  { path: '/admin/dashboard', element: <AdminDashboard />, layout: false },
+  { path: '/admin/dashboard', element: <AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>, layout: false },
 ];

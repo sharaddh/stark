@@ -1016,10 +1016,10 @@ router.get('/orders', userLoggedin, async (req, res) => {
 
 router.post('/create-order', userLoggedin, async (req, res) => {
   try {
-    const { items, totalAmount, onlineAmount, codAmount, shipping, userDetails, addressId, paymentMethod, fromCart } = req.body;
+    const { items, shipping, userDetails, addressId, paymentMethod, fromCart } = req.body;
 
-    if (!items || !Array.isArray(items) || items.length === 0 || !totalAmount || !addressId || !paymentMethod || !userDetails) {
-      return res.status(400).json({ message: 'Items, totalAmount, addressId, paymentMethod, and userDetails are required' });
+    if (!items || !Array.isArray(items) || items.length === 0 || !addressId || !paymentMethod || !userDetails) {
+      return res.status(400).json({ message: 'Items, addressId, paymentMethod, and userDetails are required' });
     }
 
     const user = await User.findById(req.user.id);
@@ -1034,44 +1034,60 @@ router.post('/create-order', userLoggedin, async (req, res) => {
       if (!mongoose.Types.ObjectId.isValid(item.productId)) {
         return res.status(400).json({ message: `Invalid productId: ${item.productId}` });
       }
-      const product = await Product.findById(item.productId).populate('sellerId');
-      if (!product) return res.status(404).json({ message: `Product not found: ${item.productId}` });
-      if (product.quantity < item.quantity) {
-        return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
+      const quantity = Number(item.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return res.status(400).json({ message: 'Each item requires a positive whole-number quantity' });
       }
 
+      const product = await Product.findById(item.productId).populate('sellerId');
+      if (!product) return res.status(404).json({ message: `Product not found: ${item.productId}` });
+      if (product.quantity < quantity) {
+        return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
+      }
+      if (product.status !== 'enabled') {
+        return res.status(400).json({ message: `${product.name} is no longer available` });
+      }
+
+      const priced = buildPricedLine(product, quantity, paymentMethod);
       const sellerId = product.sellerId._id.toString();
       if (!itemsBySeller[sellerId]) itemsBySeller[sellerId] = { items: [], seller: product.sellerId };
       itemsBySeller[sellerId].items.push({
         productId: product._id,
         name: product.name,
-        price: item.price || product.price,
-        quantity: item.quantity,
+        price: priced.price,
+        quantity,
         size: item.size,
         color: item.color,
-        material: item.material,
-        gender: item.gender,
-        brand: item.brand,
-        fit: item.fit,
-        careInstructions: item.careInstructions,
-        dimensions: item.dimensions,
-        weight: item.weight,
-        image: item.image,
-        isReturnable: item.isReturnable,
-        returnPeriod: item.returnPeriod,
-        onlineAmount: item.onlineAmount || 0,
-        codAmount: item.codAmount || 0,
+        material: product.material,
+        gender: product.gender,
+        brand: product.brand,
+        fit: product.fit,
+        careInstructions: product.careInstructions,
+        dimensions: product.dimensions,
+        weight: product.weight,
+        image: Array.isArray(product.images) ? product.images[0] : product.images,
+        isReturnable: product.isReturnable,
+        returnPeriod: product.returnPeriod,
+        onlineAmount: priced.onlineAmount,
+        codAmount: priced.codAmount,
       });
     }
+
+    // Authoritative online total, computed from the priced lines rather than the request.
+    const allLines = Object.values(itemsBySeller).flatMap((group) => group.items);
+    const shippingTotal = Number(shipping) > 0 ? round2(shipping) : 0;
+    const onlineTotal = round2(allLines.reduce((sum, i) => sum + i.onlineAmount, 0));
+    const amountDueOnline =
+      paymentMethod === 'Cash on Delivery' ? 0 : round2(onlineTotal + shippingTotal);
 
     // Create Razorpay order if needed
     let razorpayOrder = null;
     if (paymentMethod === 'Razorpay' || paymentMethod === 'Split Payment') {
-      if (onlineAmount <= 0) {
+      if (!(amountDueOnline > 0)) {
         return res.status(400).json({ message: 'Online amount must be greater than zero for Razorpay or Split Payment' });
       }
       const razorpayOptions = {
-        amount: Math.round(onlineAmount * 100), // Convert to paise
+        amount: Math.round(amountDueOnline * 100), // Convert to paise
         currency: 'INR',
         receipt: `receipt_${Date.now()}`,
       };
@@ -1091,8 +1107,9 @@ router.post('/create-order', userLoggedin, async (req, res) => {
     const numSellers = Object.keys(itemsBySeller).length;
     for (const sellerId of Object.keys(itemsBySeller)) {
       const { items: sellerItems } = itemsBySeller[sellerId];
-      const sellerTotal = sellerItems.reduce((sum, item) => sum + (item.onlineAmount || 0) + (item.codAmount || 0), 0) +
-        (shipping || 0) / numSellers;
+      const sellerTotal =
+        sellerItems.reduce((sum, item) => sum + item.onlineAmount + item.codAmount, 0) +
+        shippingTotal / numSellers;
 
       const tempOrder = new TempOrder({
         razorpayOrderId: razorpayOrder ? razorpayOrder.id : `COD_${Date.now()}_${sellerId}`,
@@ -1101,9 +1118,9 @@ router.post('/create-order', userLoggedin, async (req, res) => {
         customer: customerDetails,
         items: sellerItems,
         total: sellerTotal,
-        onlineAmount: sellerItems.reduce((sum, item) => sum + (item.onlineAmount || 0), 0),
-        codAmount: sellerItems.reduce((sum, item) => sum + (item.codAmount || 0), 0),
-        shipping: shipping / numSellers || 0,
+        onlineAmount: sellerItems.reduce((sum, item) => sum + item.onlineAmount, 0),
+        codAmount: sellerItems.reduce((sum, item) => sum + item.codAmount, 0),
+        shipping: shippingTotal / numSellers || 0,
         paymentMethod,
       });
 
@@ -1115,6 +1132,8 @@ router.post('/create-order', userLoggedin, async (req, res) => {
     const response = {
       success: true,
       message: 'Order(s) created, proceed to payment if applicable',
+      totalAmount: round2(allLines.reduce((sum, i) => sum + i.onlineAmount + i.codAmount, 0) + shippingTotal),
+      codAmount: round2(allLines.reduce((sum, i) => sum + i.codAmount, 0)),
       orders: tempOrders.map((o) => ({ orderId: o._id, sellerId: o.sellerId })),
     };
     if (razorpayOrder) {
@@ -1188,10 +1207,27 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
     const address = user.addresses.id(orderData.addressId);
     if (!address) return res.status(400).json({ success: false, message: 'Invalid address' });
 
-    // Fetch temporary orders
-    const tempOrders = await TempOrder.find({ razorpayOrderId: razorpay_order_id });
+    // Fetch temporary orders. Scoped to the authenticated user so a captured payment id
+    // cannot be replayed to convert somebody else's pending orders.
+    const tempOrders = await TempOrder.find({ razorpayOrderId: razorpay_order_id, userId: req.user.id });
     if (!tempOrders || tempOrders.length === 0) {
       return res.status(400).json({ success: false, message: 'No pending orders found' });
+    }
+
+    // The amount actually collected must match what the pending orders are worth.
+    const expectedOnline = round2(tempOrders.reduce((sum, o) => sum + (o.onlineAmount || 0), 0));
+    if (expectedOnline > 0) {
+      const tempShipping = round2(tempOrders.reduce((sum, o) => sum + (o.shipping || 0), 0));
+      const amountDue = round2(expectedOnline + tempShipping);
+      const paidPaise = Number(
+        orderData.razorpay_amount ?? orderData.amount ?? (Number(orderData.totalAmount) || 0) * 100
+      );
+      if (Number.isFinite(paidPaise) && paidPaise > 0 && Math.abs(paidPaise - Math.round(amountDue * 100)) > 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Payment amount does not match the order total',
+        });
+      }
     }
 
     // Process orders
@@ -1212,6 +1248,8 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
       for (const item of order.items) {
         await Product.updateOne({ _id: item.productId }, { $inc: { quantity: -item.quantity } });
       }
+      order.stockDeducted = true;
+      await order.save();
       // Update seller stats
       await Seller.updateOne({ _id: order.sellerId }, { $inc: { totalOrders: 1 } });
     }
@@ -1223,7 +1261,7 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
     }
 
     // Delete temporary orders
-    await TempOrder.deleteMany({ razorpayOrderId: razorpay_order_id });
+    await TempOrder.deleteMany({ razorpayOrderId: razorpay_order_id, userId: req.user.id });
 
     res.status(200).json({
       success: true,
@@ -1242,9 +1280,9 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
 
 router.post('/place-order', userLoggedin, async (req, res) => {
   try {
-    const { items, totalAmount, onlineAmount, codAmount, shipping, userDetails, addressId, paymentMethod, fromCart } = req.body;
+    const { items, shipping, userDetails, addressId, paymentMethod, fromCart } = req.body;
 
-    if (!items || !Array.isArray(items) || items.length === 0 || !totalAmount || !addressId || !paymentMethod || !userDetails) {
+    if (!items || !Array.isArray(items) || items.length === 0 || !addressId || !paymentMethod || !userDetails) {
       return res.status(400).json({ message: 'All fields are required' });
     }
     if (paymentMethod !== 'Cash on Delivery') {
@@ -1262,41 +1300,54 @@ router.post('/place-order', userLoggedin, async (req, res) => {
       if (!mongoose.Types.ObjectId.isValid(item.productId)) {
         return res.status(400).json({ message: `Invalid productId: ${item.productId}` });
       }
-      const product = await Product.findById(item.productId);
-      if (!product) return res.status(404).json({ message: `Product not found: ${item.productId}` });
-      if (product.quantity < item.quantity) {
-        return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
+      const quantity = Number(item.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return res.status(400).json({ message: 'Each item requires a positive whole-number quantity' });
       }
 
+      const product = await Product.findById(item.productId);
+      if (!product) return res.status(404).json({ message: `Product not found: ${item.productId}` });
+      if (product.quantity < quantity) {
+        return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
+      }
+      if (product.status !== 'enabled') {
+        return res.status(400).json({ message: `${product.name} is no longer available` });
+      }
+
+      const priced = buildPricedLine(product, quantity, paymentMethod);
       const sellerId = product.sellerId.toString();
       if (!itemsBySeller[sellerId]) itemsBySeller[sellerId] = { items: [], seller: product.sellerId };
       itemsBySeller[sellerId].items.push({
         productId: product._id,
         name: product.name,
-        price: item.price || product.price,
-        quantity: item.quantity,
+        price: priced.price,
+        quantity,
         size: item.size,
         color: item.color,
-        material: item.material,
-        gender: item.gender,
-        brand: item.brand,
-        fit: item.fit,
-        careInstructions: item.careInstructions,
-        dimensions: item.dimensions,
-        weight: item.weight,
-        image: item.image,
-        isReturnable: item.isReturnable,
-        returnPeriod: item.returnPeriod,
-        onlineAmount: item.onlineAmount || 0,
-        codAmount: item.codAmount || 0,
+        material: product.material,
+        gender: product.gender,
+        brand: product.brand,
+        fit: product.fit,
+        careInstructions: product.careInstructions,
+        dimensions: product.dimensions,
+        weight: product.weight,
+        image: Array.isArray(product.images) ? product.images[0] : product.images,
+        isReturnable: product.isReturnable,
+        returnPeriod: product.returnPeriod,
+        onlineAmount: priced.onlineAmount,
+        codAmount: priced.codAmount,
       });
     }
+
+    const shippingTotal = Number(shipping) > 0 ? round2(shipping) : 0;
+    const numSellers = Object.keys(itemsBySeller).length;
 
     const orders = [];
     for (const sellerId of Object.keys(itemsBySeller)) {
       const { items: sellerItems } = itemsBySeller[sellerId];
-      const sellerTotal = sellerItems.reduce((sum, item) => sum + (item.onlineAmount || 0) + (item.codAmount || 0), 0) +
-        (shipping || 0) / Object.keys(itemsBySeller).length;
+      const sellerTotal =
+        sellerItems.reduce((sum, item) => sum + item.onlineAmount + item.codAmount, 0) +
+        shippingTotal / numSellers;
 
       const order = new Order({
         orderId: `ORD_${Date.now()}_${sellerId}_${Math.random().toString(36).substr(2, 5)}`,
@@ -1308,11 +1359,11 @@ router.post('/place-order', userLoggedin, async (req, res) => {
           phoneNumber: userDetails.phoneNumber || user.phoneNumber,
           address: `${address.street}, ${address.city}, ${address.state}, ${address.postalCode}, ${address.country}`,
         },
-        items: sellerItems, // Fixed: Removed erroneous '0'
+        items: sellerItems,
         total: sellerTotal,
-        onlineAmount: sellerItems.reduce((sum, item) => sum + (item.onlineAmount || 0), 0),
-        codAmount: sellerItems.reduce((sum, item) => sum + (item.codAmount || 0), 0),
-        shipping: shipping / Object.keys(itemsBySeller).length || 0,
+        onlineAmount: sellerItems.reduce((sum, item) => sum + item.onlineAmount, 0),
+        codAmount: sellerItems.reduce((sum, item) => sum + item.codAmount, 0),
+        shipping: shippingTotal / numSellers || 0,
         paymentMethod,
         paymentStatus: 'pending',
         status: 'order confirmed',
@@ -1333,6 +1384,7 @@ router.post('/place-order', userLoggedin, async (req, res) => {
 
     res.status(200).json({
       message: 'Order placed successfully',
+      codAmount: round2(orders.reduce((sum, o) => sum + (o.codAmount || 0), 0)),
       orders: orders.map((o) => ({ orderId: o.orderId, sellerId: o.sellerId })),
     });
   } catch (error) {
@@ -1361,8 +1413,13 @@ router.put('/orders/:orderId/cancel', userLoggedin, async (req, res) => {
     order.statusHistory.push({ status: 'cancelled', timestamp: Date.now() });
     await order.save();
 
-    for (const item of order.items) {
-      await Product.updateOne({ _id: item.productId }, { $inc: { quantity: item.quantity } });
+    // Only give the stock back if it was actually taken when the order was created.
+    // Cash-on-Delivery orders never decrement quantity, so restoring here would invent
+    // inventory out of nothing on every cancellation.
+    if (order.stockDeducted) {
+      for (const item of order.items) {
+        await Product.updateOne({ _id: item.productId }, { $inc: { quantity: item.quantity } });
+      }
     }
 
     res.status(200).json({ message: 'Order cancelled successfully' });

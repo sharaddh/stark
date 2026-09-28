@@ -15,7 +15,10 @@ const adminSchema = new mongoose.Schema({
     sparse: true,
     trim: true,
     lowercase: true,
-    match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please provide a valid email'],
+    match: [
+      /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/,
+      'Please provide a valid email',
+    ],
   },
   role: { type: String, default: 'admin' },
   name: {

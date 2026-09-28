@@ -312,7 +312,7 @@ router.get('/products', async (req, res) => {
     let query = { status: 'enabled', quantity: { $gt: 0 } };
 
     if (q) {
-      const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const regex = new RegExp(escapeRegex(q), 'i');
       query.$or = [
         { name: regex },
         { description: regex },
@@ -323,7 +323,7 @@ router.get('/products', async (req, res) => {
 
     if (category && category.toLowerCase() !== 'all') {
       const categoryDoc = await Category.findOne({
-        name: { $regex: new RegExp(`^${category}$`, 'i') },
+        name: { $regex: new RegExp(`^${escapeRegex(category)}$`, 'i') },
       });
       if (!categoryDoc) {
         return res.status(404).json({ message: `Category '${category}' not found` });
@@ -360,60 +360,6 @@ router.get('/products', async (req, res) => {
 });
 
 
-router.get('/products/:productId', async (req, res) => {
-  try {
-    const productId = req.params.productId;
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      return res.status(400).json({ message: 'Invalid product ID' });
-    }
-
-    const product = await Product.findById(productId)
-      .populate('sellerId', 'name shopName')
-      .populate('category', 'name');
-    if (!product) return res.status(404).json({ message: 'Product not found' });
-
-    // Track view for authenticated users
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await User.findById(decoded.id);
-        if (user) {
-          user.recentlyViewed = [
-            { productId, viewedAt: new Date() },
-            ...user.recentlyViewed.filter((v) => v.productId.toString() !== productId).slice(0, 9),
-          ];
-          await user.save();
-          await Product.updateOne({ _id: productId }, { $inc: { viewCount: 1, views: 1 } });
-        }
-      } catch (error) {
-        console.warn('Token invalid for view tracking:', error.message);
-      }
-    }
-
-    res.status(200).json({ product });
-  } catch (error) {
-    console.error('Fetch Product Error:', error);
-    res.status(500).json({ message: 'Failed to fetch product', error: error.message });
-  }
-});
-
-router.post('/products/by-ids', async (req, res) => {
-  const { productIds } = req.body;
-  try {
-    if (!Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({ message: 'productIds must be a non-empty array' });
-    }
-    const products = await Product.find({ _id: { $in: productIds } })
-      .populate('sellerId', 'name shopName')
-      .populate('category', 'name');
-    res.json({ success: true, products });
-  } catch (error) {
-    console.error('Error fetching products by IDs:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 router.get('/products/sponsored', async (req, res) => {
   try {
     const products = await Product.find({ isSponsored: true })
@@ -427,6 +373,10 @@ router.get('/products/sponsored', async (req, res) => {
   }
 });
 
+// NOTE: this route and /products/sponsored are declared ABOVE /products/:productId on
+// purpose. Express matches in registration order, so a literal path registered after a
+// ':productId' param route is unreachable -- it would be captured as productId='sponsored'
+// and 400 out as an invalid ObjectId.
 router.get('/products/most-viewed-ordered', async (req, res) => {
   try {
     const startDate = new Date();
@@ -482,6 +432,60 @@ router.get('/products/most-viewed-ordered', async (req, res) => {
   }
 });
 
+router.get('/products/:productId', async (req, res) => {
+  try {
+    const productId = req.params.productId;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: 'Invalid product ID' });
+    }
+
+    const product = await Product.findById(productId)
+      .populate('sellerId', 'name shopName')
+      .populate('category', 'name');
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    // Track view for authenticated users
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = await User.findById(decoded.id);
+        if (user) {
+          user.recentlyViewed = [
+            { productId, viewedAt: new Date() },
+            ...user.recentlyViewed.filter((v) => v.productId.toString() !== productId).slice(0, 9),
+          ];
+          await user.save();
+          await Product.updateOne({ _id: productId }, { $inc: { viewCount: 1, views: 1 } });
+        }
+      } catch (error) {
+        console.warn('Token invalid for view tracking:', error.message);
+      }
+    }
+
+    res.status(200).json({ product });
+  } catch (error) {
+    console.error('Fetch Product Error:', error);
+    res.status(500).json({ message: 'Failed to fetch product', error: error.message });
+  }
+});
+
+router.post('/products/by-ids', async (req, res) => {
+  const { productIds } = req.body;
+  try {
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({ message: 'productIds must be a non-empty array' });
+    }
+    const products = await Product.find({ _id: { $in: productIds } })
+      .populate('sellerId', 'name shopName')
+      .populate('category', 'name');
+    res.json({ success: true, products });
+  } catch (error) {
+    console.error('Error fetching products by IDs:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Seller Routes
 router.get('/sellers', async (req, res) => {
   try {
@@ -507,9 +511,26 @@ router.get('/sellers', async (req, res) => {
 
 router.get('/seller/:sellerId', async (req, res) => {
   try {
-    const seller = await Seller.findById(req.params.sellerId);
-    if (!seller || seller.role !== 'seller') return res.status(404).json({ message: 'Seller not found' });
-    res.status(200).json({ seller });
+    if (!mongoose.Types.ObjectId.isValid(req.params.sellerId)) {
+      return res.status(400).json({ message: 'Invalid seller ID' });
+    }
+    // Public storefront fields only -- paymentIds, bank account, IFSC and UPI must never
+    // leave the server on an unauthenticated route.
+    const seller = await Seller.findById(req.params.sellerId)
+      .select('name shopName profilePicture phoneNumber address status')
+      .lean();
+    if (!seller || seller.role !== 'seller' || seller.status !== 'enabled') {
+      return res.status(404).json({ message: 'Seller not found' });
+    }
+    res.status(200).json({
+      seller: {
+        ...seller,
+        profilePicture:
+          seller.profilePicture && seller.profilePicture !== ''
+            ? seller.profilePicture
+            : 'https://via.placeholder.com/80x80?text=No+Image',
+      },
+    });
   } catch (error) {
     console.error('Fetch Seller Error:', error);
     res.status(500).json({ message: 'Failed to fetch seller', error: error.message });
@@ -642,7 +663,11 @@ router.get('/cart', userLoggedin, async (req, res) => {
   }
 });
 
-router.post('/cart/add', userLoggedin, async (req, res) => {
+// Add-to-cart is reached at two different URLs by the client:
+//   POST /api/user/auth/cart/add  (ProductCard, ProductCard4line, store.js, Components/js.js)
+//   POST /api/user/auth/cart      (home/RecentlyViewedSection, home/TrendingSection, home/CategorySectionn)
+// Both send { productId, quantity, size, color }, so one handler is registered on both.
+const addToCartHandler = async (req, res) => {
   try {
     const { productId, quantity, size, color } = req.body;
     if (!productId || !quantity || !size || !color) {

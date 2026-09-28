@@ -8,6 +8,7 @@ const STALE_TIME = 10 * 60 * 1000;
 export const DataProvider = ({ children }) => {
   const [cache, setCache] = useState({});
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
   const isFetchingRef = useRef(false);
   const hasInitializedRef = useRef(false);
   const cacheRef = useRef(cache);
@@ -40,6 +41,12 @@ export const DataProvider = ({ children }) => {
         updates.layout = { data: data.layout?.components || [], timestamp: Date.now() };
         updates.products = { data: (data.products || []).map(normalize), timestamp: Date.now() };
         updates.sellers = { data: data.sellers || [], timestamp: Date.now() };
+        // These two are read by CategorySection / CategoryFilterBar / CartSection via
+        // cache.categories?.data and cache.cart?.data. They were never written here, so
+        // those sections rendered "No categories available." and an empty cart even
+        // though the API returned the data.
+        updates.categories = { data: data.categories || [], timestamp: Date.now() };
+        updates.cart = { data: data.cart || [], timestamp: Date.now() };
         updates.comboOffers = {
           data: (data.comboOffers || [])
             .filter(o => o?._id && Array.isArray(o.products) && o.products.length >= 2)
@@ -66,7 +73,9 @@ export const DataProvider = ({ children }) => {
           const merged = { ...prev };
           for (const [key, value] of Object.entries(updates)) {
             const existing = merged[key];
-            if (!existing || (Date.now() - (existing.timestamp || 0)) > STALE_TIME) {
+            // An explicit refreshData() must win over the staleness gate, otherwise the
+            // refetch would fetch fresh data and then throw it away.
+            if (refreshToken > 0 || !existing || (Date.now() - (existing.timestamp || 0)) > STALE_TIME) {
               merged[key] = value;
             }
           }
@@ -86,16 +95,20 @@ export const DataProvider = ({ children }) => {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [refreshToken]);
 
   const contextValue = useMemo(() => ({
     cache,
     updateCache,
     isDataStale,
     isLoading: isInitialLoading,
+    // Bumping this counter is what actually re-runs the fetch effect. The old version
+    // only cleared the refs, but the effect has [] dependencies so it never fired again
+    // and the cache kept serving whatever it had on mount.
     refreshData: () => {
       hasInitializedRef.current = false;
       isFetchingRef.current = false;
+      setRefreshToken((n) => n + 1);
     },
   }), [cache, updateCache, isDataStale, isInitialLoading]);
 

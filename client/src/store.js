@@ -684,7 +684,9 @@ export const fetchCartItems = () => async (dispatch) => {
     const { data } = await axios.get('/api/user/auth/cart', {
       headers: { Authorization: `Bearer ${userToken}` },
     });
-    dispatch(setCartItems(data.items || []));
+    // GET /cart responds { success, cart: { items } } -- reading data.items always
+    // yielded undefined, so the redux cart was permanently empty.
+    dispatch(setCartItems(data.cart?.items || []));
     dispatch(setCartError(null));
   } catch (error) {
     const errorMsg = error.response?.data?.message || 'Failed to fetch cart';
@@ -767,7 +769,8 @@ export const fetchWishlistItems = () => async (dispatch) => {
     const { data } = await axios.get('/api/user/auth/wishlist', {
       headers: { Authorization: `Bearer ${userToken}` },
     });
-    dispatch(setWishlistItems(data.items || []));
+    // GET /wishlist responds { wishlist }, not { items }.
+    dispatch(setWishlistItems(data.wishlist || []));
     dispatch(setWishlistError(null));
   } catch (error) {
     const errorMsg = error.response?.data?.message || 'Failed to fetch wishlist';

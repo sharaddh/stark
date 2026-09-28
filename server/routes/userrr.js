@@ -1432,6 +1432,8 @@ router.put('/orders/:orderId/cancel', userLoggedin, async (req, res) => {
 // Checkout Routes
 router.post('/checkout', userLoggedin, async (req, res) => {
   try {
+    const paymentMethod = req.body?.paymentMethod || 'Cash on Delivery';
+
     const user = await User.findById(req.user.id).populate('cart.productId');
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (!user.cart || user.cart.length === 0) return res.status(400).json({ message: 'Cart is empty' });
@@ -1439,10 +1441,21 @@ router.post('/checkout', userLoggedin, async (req, res) => {
       return res.status(400).json({ message: 'Please add a delivery address' });
     }
 
-    const total = user.cart.reduce((sum, item) => sum + item.productId.price * item.quantity, 0);
+    // A cart row whose product was deleted populates as null, so drop those before pricing.
+    const liveCart = user.cart.filter((item) => item.productId);
+    if (liveCart.length === 0) {
+      user.cart = [];
+      await user.save();
+      return res.status(400).json({ message: 'No items in your cart are still available' });
+    }
+
+    const total = round2(
+      liveCart.reduce((sum, item) => sum + productPrice(item.productId) * item.quantity, 0)
+    );
 
     const itemsBySeller = {};
-    for (const item of user.cart) {
+    for (const item of liveCart) {
+      const priced = buildPricedLine(item.productId, item.quantity, paymentMethod);
       const sellerId = item.productId.sellerId.toString();
       if (!itemsBySeller[sellerId]) {
         itemsBySeller[sellerId] = { items: [], seller: item.productId.sellerId };
@@ -1450,17 +1463,26 @@ router.post('/checkout', userLoggedin, async (req, res) => {
       itemsBySeller[sellerId].items.push({
         productId: item.productId._id,
         name: item.productId.name,
-        price: item.productId.price,
+        price: priced.price,
         quantity: item.quantity,
         size: item.size,
         color: item.color,
+        material: item.productId.material,
+        gender: item.productId.gender,
+        brand: item.productId.brand,
+        fit: item.productId.fit,
+        image: Array.isArray(item.productId.images) ? item.productId.images[0] : item.productId.images,
+        isReturnable: item.productId.isReturnable,
+        returnPeriod: item.productId.returnPeriod,
+        onlineAmount: priced.onlineAmount,
+        codAmount: priced.codAmount,
       });
     }
 
     const orders = [];
     for (const sellerId of Object.keys(itemsBySeller)) {
       const { items: sellerItems } = itemsBySeller[sellerId];
-      const sellerTotal = sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const sellerTotal = round2(sellerItems.reduce((sum, item) => sum + item.onlineAmount + item.codAmount, 0));
 
       const order = new Order({
         orderId: `ORD_${Date.now()}_${sellerId}_${Math.random().toString(36).substr(2, 5)}`,
@@ -1468,24 +1490,32 @@ router.post('/checkout', userLoggedin, async (req, res) => {
         sellerId,
         customer: {
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.phoneNumber,
+          email: user.email,
           phoneNumber: user.phoneNumber,
-          address: `${user.addresses[0].street}, ${user.addresses[0].city}, ${user.addresses[0].state}, ${user.addresses[0].postalCode}, ${user.addresses[0].country}`,
+          address: formatAddress(user.addresses[0]),
         },
         items: sellerItems,
         total: sellerTotal,
-        status: 'pending',
-        paymentMethod: 'pending',
+        onlineAmount: round2(sellerItems.reduce((sum, item) => sum + item.onlineAmount, 0)),
+        codAmount: round2(sellerItems.reduce((sum, item) => sum + item.codAmount, 0)),
+        shipping: 0,
+        paymentMethod,
         paymentStatus: 'pending',
-        statusHistory: [{ status: 'pending', timestamp: Date.now() }],
+        status: 'order confirmed',
+        statusHistory: [{ status: 'order confirmed', timestamp: Date.now() }],
       });
 
       await order.save();
       orders.push(order);
     }
 
-    for (const item of user.cart) {
-      await Product.updateOne({ _id: item.productId }, { $inc: { quantity: -item.quantity } });
+    for (const item of liveCart) {
+      await Product.updateOne(
+        { _id: item.productId._id },
+        { $inc: { quantity: -item.quantity } }
+      );
     }
+    await Order.updateMany({ _id: { $in: orders.map((o) => o._id) } }, { $set: { stockDeducted: true } });
 
     user.cart = [];
     await user.save();
@@ -1501,24 +1531,29 @@ router.post('/checkout/:productId', userLoggedin, async (req, res) => {
   try {
     const productId = req.params.productId;
     const { quantity, size, color } = req.body;
+    const paymentMethod = req.body?.paymentMethod || 'Cash on Delivery';
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(400).json({ message: 'Invalid product ID' });
     }
-    if (!quantity || quantity <= 0 || !size || !color) {
+    const qty = Number(quantity);
+    if (!Number.isInteger(qty) || qty <= 0 || !size || !color) {
       return res.status(400).json({ message: 'Valid quantity, size, and color are required' });
     }
 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.addresses || user.addresses.length === 0) {
+      return res.status(400).json({ message: 'Please add a delivery address' });
+    }
 
     const product = await Product.findById(productId);
     if (!product) return res.status(404).json({ message: 'Product not found' });
-    if (quantity > product.quantity) {
+    if (qty > product.quantity) {
       return res.status(400).json({ message: 'Requested quantity exceeds available stock' });
     }
 
-    const total = product.price * quantity;
+    const priced = buildPricedLine(product, qty, paymentMethod);
 
     const order = new Order({
       orderId: `ORD_${Date.now()}_${product.sellerId}_${Math.random().toString(36).substr(2, 5)}`,
@@ -1526,17 +1561,38 @@ router.post('/checkout/:productId', userLoggedin, async (req, res) => {
       sellerId: product.sellerId,
       customer: {
         name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.phoneNumber,
+        email: user.email,
         phoneNumber: user.phoneNumber,
-        address: `${user.addresses[0].street}, ${user.addresses[0].city}, ${user.addresses[0].state}, ${user.addresses[0].postalCode}, ${user.addresses[0].country}`,
+        address: formatAddress(user.addresses[0]),
       },
-      items: [{ productId: product._id, name: product.name, price: product.price, quantity, size, color }],
-      total: total,
-      status: 'pending',
-      paymentMethod: 'pending',
+      items: [{
+        productId: product._id,
+        name: product.name,
+        price: priced.price,
+        quantity: qty,
+        size,
+        color,
+        material: product.material,
+        gender: product.gender,
+        brand: product.brand,
+        fit: product.fit,
+        image: Array.isArray(product.images) ? product.images[0] : product.images,
+        isReturnable: product.isReturnable,
+        returnPeriod: product.returnPeriod,
+        onlineAmount: priced.onlineAmount,
+        codAmount: priced.codAmount,
+      }],
+      total: priced.lineTotal,
+      onlineAmount: priced.onlineAmount,
+      codAmount: priced.codAmount,
+      shipping: 0,
+      paymentMethod,
       paymentStatus: 'pending',
-      statusHistory: [{ status: 'pending', timestamp: Date.now() }],
+      status: 'order confirmed',
+      statusHistory: [{ status: 'order confirmed', timestamp: Date.now() }],
     });
 
+    order.stockDeducted = true;
     await order.save();
     await Product.updateOne({ _id: productId }, { $inc: { quantity: -quantity } });
     await Seller.updateOne({ _id: product.sellerId }, { $inc: { totalOrders: 1 } });
@@ -1628,26 +1684,6 @@ router.get('/category/:categoryId?', async (req, res) => {
   }
 });
 
-
-router.get('/sponsored', async (req, res) => {
-  try {
-    const sponsoredProducts = await SponsoredProduct.find()
-      .populate({
-        path: 'productId',
-        select: '_id name price discountedPrice images category',
-      })
-      .sort({ addedAt: -1 });
-
-    const products = sponsoredProducts
-      .filter((sp) => sp.productId)
-      .map((sp) => sp.productId);
-
-    res.status(200).json({ success: true, products });
-  } catch (error) {
-    console.error('Fetch Sponsored Products Error:', error);
-    res.status(500).json({ message: 'Failed to fetch sponsored products', error: error.message });
-  }
-});
 
 router.get('/trending', async (req, res) => {
   try {
@@ -1781,8 +1817,8 @@ router.get('/searches/recent', userLoggedin, async (req, res) => {
         if (!similarProducts.length) {
           similarProducts = await Product.find({
             $or: [
-              { name: { $regex: query, $options: 'i' } },
-              { description: { $regex: query, $options: 'i' } },
+              { name: { $regex: escapeRegex(query), $options: 'i' } },
+              { description: { $regex: escapeRegex(query), $options: 'i' } },
             ],
           })
             .limit(4)
@@ -1843,8 +1879,8 @@ router.get('/search/recent', userLoggedin, async (req, res) => {
         if (!similarProducts.length) {
           similarProducts = await Product.find({
             $or: [
-              { name: { $regex: query, $options: 'i' } },
-              { description: { $regex: query, $options: 'i' } },
+              { name: { $regex: escapeRegex(query), $options: 'i' } },
+              { description: { $regex: escapeRegex(query), $options: 'i' } },
             ],
           })
             .limit(4)
@@ -2034,9 +2070,31 @@ router.get('/search', userLoggedin, async (req, res) => {
     res.status(500).json({ message: 'Failed to perform search' });
   }
 });
+// Optional auth: resolves req.user when a valid token is present, but never rejects the
+// request. /initial-data is fetched by the public home page, so it has to work for
+// anonymous visitors while still returning personalised data (recent searches, recently
+// viewed) to signed-in users. Without this, req.user was always undefined and that
+// personalisation was silently always empty.
+const optionalUserLogin = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return next();
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.id || decoded._id;
+    if (!userId) return next();
+    req.user = await User.findById(userId);
+  } catch (error) {
+    // A bad or expired token is not an error here -- just treat the caller as anonymous.
+    req.user = undefined;
+  }
+  return next();
+};
+
 // optimized-initial-data.js
 // Updated backend: /initial-data route with improved comboOffers and ads
-router.get('/initial-data', async (req, res) => {
+router.get('/initial-data', optionalUserLogin, async (req, res) => {
   try {
     const { limit = 20, page = 1 } = req.query;
     const skip = (page - 1) * limit;
@@ -2104,17 +2162,17 @@ router.get('/initial-data', async (req, res) => {
     ]);
 
     // Sanitize combo offers
-    console.log('🧪 Raw Combo Offers:', comboOffersRaw.length);
+    console.log('ðŸ§ª Raw Combo Offers:', comboOffersRaw.length);
     const comboOffers = comboOffersRaw.filter(o => {
       const valid = o.products?.length >= 2;
-      if (!valid) console.log('❌ Skipped combo (less than 2 valid products):', o._id);
+      if (!valid) console.log('âŒ Skipped combo (less than 2 valid products):', o._id);
       return valid;
     }).map(o => ({
       ...o,
       image: getFirstImage(o.images, getFirstImage(o.products?.[0]?.images, DEFAULTS.COMBO_IMAGE)),
       products: sanitizeProducts(o.products),
     }));
-    console.log('✅ Final sanitized comboOffers:', comboOffers.length);
+    console.log('âœ… Final sanitized comboOffers:', comboOffers.length);
 
     // Sanitize ads with corrected casing
     const ads = ['singleadd', 'doubleadd', 'tripleadd'].map(type => ({
@@ -2124,7 +2182,7 @@ router.get('/initial-data', async (req, res) => {
         url: sanitizeImage(i.url, DEFAULTS.AD_IMAGE)
       }))
     }));
-    console.log('🪧 Ads processed:', ads.map(a => `${a.type}: ${a.images.length}`));
+    console.log('ðŸª§ Ads processed:', ads.map(a => `${a.type}: ${a.images.length}`));
 
     const banner = {
       url: sanitizeImage(adminAds?.singleadd?.images?.find(i => i?.url?.trim())?.url, DEFAULTS.BANNER_IMAGE)
@@ -2138,11 +2196,25 @@ router.get('/initial-data', async (req, res) => {
     ));
     const categoryProductsMap = Object.assign({}, ...catProds);
 
-    const recentlyViewed = userData.recentlyViewed?.length
-      ? await Product.find({ _id: { $in: userData.recentlyViewed } }).populate(['category', 'sellerId']).lean()
+    // recentlyViewed is stored as [{ productId, viewedAt }]. $in needs bare ids, and the
+    // documents have to be re-ordered by recency afterwards because MongoDB returns
+    // $in results in natural order, not in the order the ids were supplied.
+    const recentIds = (userData.recentlyViewed || [])
+      .map((rv) => (rv && rv.productId ? rv.productId : rv))
+      .filter(Boolean)
+      .slice(0, 10);
+
+    const recentDocs = recentIds.length
+      ? await Product.find({ _id: { $in: recentIds } }).populate(['category', 'sellerId']).lean()
       : [];
 
+    const byId = new Map(recentDocs.map((p) => [String(p._id), p]));
+    const recentlyViewed = recentIds
+      .map((id) => byId.get(String(id)))
+      .filter(Boolean);
+
     const searches = await User.aggregate([
+      { $match: { _id: userId } }, // Never aggregate another user's search history
       { $unwind: '$recentSearches' },
       { $match: { recentSearches: { $ne: '' } } },
       { $group: { _id: '$recentSearches', count: { $sum: 1 } } },
@@ -2155,6 +2227,24 @@ router.get('/initial-data', async (req, res) => {
     const sponsoredProducts = sanitizeProducts(sponsoredRaw.map(sp => sp.productId).filter(Boolean));
     const topProducts = await Product.find({ status: 'enabled', quantity: { $gt: 0 } }).sort({ viewCount: -1 }).limit(3).populate(['category', 'sellerId']).lean();
 
+    // The home page reads the cart out of the shared DataProvider cache, which is filled
+    // from this one response. Serve it here (only for a signed-in caller) so CartSection
+    // has something to render instead of an always-empty cache key.
+    const cartItems = userId
+      ? (
+          await User.findById(userId)
+            .select('cart')
+            .populate('cart.productId')
+            .lean()
+        )?.cart?.filter((item) => item.productId)
+          .map((item) => ({
+            product: item.productId,
+            quantity: item.quantity,
+            size: item.size,
+            color: item.color,
+          })) || []
+      : [];
+
     return res.json({
       layout: { components: layout?.components || [] },
       products: sanitizeProducts(products),
@@ -2164,6 +2254,7 @@ router.get('/initial-data', async (req, res) => {
       sponsoredProducts,
       trendingProducts,
       recentlyViewed: sanitizeProducts(recentlyViewed),
+      cart: cartItems,
       ads,
       tripleAds: ads.filter(a => a.type === 'Triple Ad'),
       banner,

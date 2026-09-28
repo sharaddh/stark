@@ -74,6 +74,10 @@ const orderSchema = new mongoose.Schema(
       default: 'pending',
     },
     paymentId: { type: String, trim: true },
+    // Whether product stock was actually decremented when this order was created.
+    // Cash-on-Delivery orders reserve nothing at creation time, so a cancellation must
+    // not add the quantity back -- that inflated stock on every COD cancellation.
+    stockDeducted: { type: Boolean, default: false },
     status: {
       type: String,
       enum: ['order confirmed', 'processing', 'shipped', 'out for delivery', 'delivered', 'cancelled', 'returned'],

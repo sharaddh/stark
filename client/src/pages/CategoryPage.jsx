@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { debounce } from 'lodash';
-import axios from '../axios';
+// useraxios, not '../axios': /api/user/auth/products is a public shopper endpoint and the
+// '../axios' instance redirects to /admin/login on any 401/403.
+import axios from '../useraxios';
 import toast, { Toaster } from 'react-hot-toast';
 import ProductCard from '../Components/ProductCard';
 import ProductCardSkeleton from '../Components/ProductCardSkeleton';

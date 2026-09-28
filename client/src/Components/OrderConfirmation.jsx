@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from '../axios';
+// useraxios, not '../axios': /api/user/auth/order/:id is the customer's own order. The
+// '../axios' instance redirects to /admin/login on any 401/403.
+import axios from '../useraxios';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 

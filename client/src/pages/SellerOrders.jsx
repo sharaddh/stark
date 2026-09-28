@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import axios from '../axios';
+// selleraxios, not '../axios': /api/seller/auth/orders needs sellerToken, and the
+// '../axios' instance would redirect to /admin/login on any 401/403.
+import axios from '../selleraxios';
 
 const SellerOrders = () => {
   const navigate = useNavigate();

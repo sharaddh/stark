@@ -702,7 +702,10 @@ const addToCartHandler = async (req, res) => {
     console.error('Add to Cart Error:', error);
     res.status(500).json({ message: 'Failed to add to cart', error: error.message });
   }
-});
+};
+
+router.post('/cart', userLoggedin, addToCartHandler);
+router.post('/cart/add', userLoggedin, addToCartHandler);
 
 router.put('/cart/:productId', userLoggedin, async (req, res) => {
   try {
@@ -894,13 +897,22 @@ router.post('/recently-viewed', userLoggedin, async (req, res) => {
         $pull: { recentlyViewed: { productId } }, // Remove if already viewed
         $push: {
           recentlyViewed: {
-            productId,
-            viewedAt: new Date(),
+            // $position is a top-level $push modifier, not a field of the stored entry.
+            // It has to travel with $each; on its own it was ignored (or rejected as an
+            // invalid $-prefixed storage field) and the new view landed at the end of the
+            // list, which is the opposite of "recently viewed".
+            $each: [{ productId, viewedAt: new Date() }],
             $position: 0, // Add to start
           },
         },
       },
       { new: true }
+    );
+
+    // Keep the list bounded to the 10 most recent, newest first.
+    await User.updateOne(
+      { _id: userId },
+      { $push: { recentlyViewed: { $each: [], $slice: -10 } } }
     );
 
     res.status(200).json({ success: true, message: 'Product view recorded' });

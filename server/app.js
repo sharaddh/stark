@@ -3,14 +3,14 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const multer = require("multer");
-const dns = require( 'dns');
+const dns = require('dns');
 
 dotenv.config();
 
 const app = express();
 
 connectDB();
-dns.setServers(['0.0.0.0', '8.8.4.4']);   
+dns.setServers(['0.0.0.0', '8.8.4.4']);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

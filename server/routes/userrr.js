@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const axios = require('axios');
 const { Client } = require('@elastic/elasticsearch');
 const User = require('../models/userModel');
 const Product = require('../models/productModel');
@@ -32,6 +33,54 @@ const razorpay = new Razorpay({
   key_id: RAZORPAY_KEY_ID,
   key_secret: RAZORPAY_KEY_SECRET,
 });
+
+const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+// Escapes user-supplied text before it reaches $regex / new RegExp. Without this a
+// search for "(" throws an invalid-regex error and a search for ".*" matches everything.
+const escapeRegex = (str) => String(str ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Amount a customer actually pays for a unit. Falls back to price when a product was
+// created before discountedPrice existed.
+const productPrice = (product) => {
+  const discounted = Number(product.discountedPrice);
+  if (Number.isFinite(discounted) && discounted > 0) return discounted;
+  return Number(product.price) || 0;
+};
+
+const formatAddress = (address) =>
+  address
+    ? [address.street, address.city, address.state, address.postalCode, address.country]
+        .filter(Boolean)
+        .join(', ')
+    : '';
+
+// Order amounts are always derived from the product document. The client sends price /
+// onlineAmount / codAmount for display convenience, but those values are attacker
+// controlled and must never reach the order record or the Razorpay charge.
+const buildPricedLine = (product, quantity, paymentMethod) => {
+  const lineTotal = round2(product.price * quantity);
+  const codAllowed = Boolean(product.isCashOnDeliveryAvailable);
+  const onlinePct = codAllowed
+    ? Math.min(Math.max(product.onlinePaymentPercentage ?? 100, 0), 100)
+    : 100;
+
+  let onlineAmount;
+  let codAmount;
+  if (paymentMethod === 'Cash on Delivery') {
+    onlineAmount = 0;
+    codAmount = lineTotal;
+  } else if (paymentMethod === 'Razorpay') {
+    onlineAmount = lineTotal;
+    codAmount = 0;
+  } else {
+    // Split payment: the product's own online share is paid now, the rest on delivery.
+    onlineAmount = round2(lineTotal * (onlinePct / 100));
+    codAmount = round2(lineTotal - onlineAmount);
+  }
+
+  return { price: product.price, lineTotal, onlineAmount, codAmount };
+};
 
 // Optional Elasticsearch Client
 const elasticsearch = process.env.ELASTICSEARCH_URL
@@ -157,17 +206,15 @@ router.post('/login-register', async (req, res) => {
   if (!/^\d{6}$/.test(pin)) return res.status(400).json({ message: 'PIN must be a 6-digit number' });
 
   try {
-    let user = await User.findOne({ phoneNumber });
+    let user = await User.findOne({ phoneNumber }).select('+pin');
     let isNewUser = false;
 
     if (!user) {
       isNewUser = true;
-      user = new User({
-        phoneNumber,
-        role: 'user',
-        pin,
-      });
+      user = new User({ phoneNumber, role: 'user', pin });
       await user.save();
+    } else if (!(await user.matchPin(pin))) {
+      return res.status(401).json({ message: 'Incorrect PIN' });
     }
 
     const token = jwt.sign(
@@ -225,39 +272,6 @@ router.get('/profile', userLoggedin, async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch profile', error: error.message });
   }
 });
-
-router.post('/cart/add', userLoggedin, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { productId, quantity, size, color } = req.body;
-
-    if (!productId || !quantity || quantity < 1 || !size || !color) {
-      return res.status(400).json({ message: 'Invalid product data' });
-    }
-
-    // Validate product exists and stock is available
-    const product = await Product.findById(productId);
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
-    if (quantity > product.quantityAvailable) {
-      return res.status(400).json({ message: 'Requested quantity not available' });
-    }
-
-    // Fetch user and update cart using model method
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    await user.updateCart({ productId, quantity, size, color });
-
-    return res.json({ message: 'Item added to cart successfully', cart: user.cart });
-  } catch (err) {
-    console.error('Cart Add Error:', err);
-    return res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
 
 // Address Routes
 router.post('/add-address', userLoggedin, async (req, res) => {

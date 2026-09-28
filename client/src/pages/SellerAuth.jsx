@@ -584,7 +584,9 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from '../axios';
+// selleraxios, not '../axios': this page hits /api/seller/auth/*. The '../axios' instance
+// is the admin one -- it attaches adminToken and redirects to /admin/login on any 401.
+import axios from '../selleraxios';
 import { Toaster, toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import bgImage from '../assets/login.jpeg'; // Placeholder for background image

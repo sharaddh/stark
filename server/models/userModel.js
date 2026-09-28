@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
   {
@@ -16,7 +17,14 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       type: String,
       lowercase: true,
-      match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please provide a valid email'],
+      match: [
+        /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/,
+        'Please provide a valid email',
+      ],
+    },
+    pin: {
+      type: String,
+      select: false,
     },
     dateOfBirth: { type: Date, default: null },
     lastName: { type: String, trim: true },
@@ -131,13 +139,19 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Pre-save hook to update `updatedAt` and log cart/savedForLater for debugging
-userSchema.pre('save', function (next) {
+// Pre-save hook to update `updatedAt` and hash the PIN when it is changed
+userSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
-  console.log('Cart before save:', JSON.stringify(this.cart));
-  console.log('Saved for later before save:', JSON.stringify(this.savedForLater));
+  if (this.isModified('pin') && this.pin) {
+    this.pin = await bcrypt.hash(this.pin, 10);
+  }
   next();
 });
+
+userSchema.methods.matchPin = async function (enteredPin) {
+  if (!this.pin || !enteredPin) return false;
+  return await bcrypt.compare(String(enteredPin), this.pin);
+};
 
 // Methods
 userSchema.methods.generateVerificationToken = function () {

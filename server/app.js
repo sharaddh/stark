@@ -3,52 +3,43 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const multer = require("multer");
-const dns = require('dns');
 
 dotenv.config();
 
 const app = express();
 
 connectDB();
-dns.setServers(['0.0.0.0', '8.8.4.4']);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+app.disable("x-powered-by");
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 const allowedOrigins = [
+  process.env.CLIENT_ORIGIN,
   "https://starkk.shop",
-  // "http://localhost:5173",
+  "http://localhost:5173",
   "http://localhost:5174",
   "https://starkk.netlify.app",
   "https://stark-gamma.vercel.app",
-  "https://kidney-1-b2qy.onrender.com"
-];
+  "https://kidney-1-b2qy.onrender.com",
+].filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
+    // No Origin header (server-to-server, curl) or a known frontend origin
     if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+      return callback(null, true);
     }
+    // Unknown origin: deny quietly instead of throwing a 500
+    return callback(null, false);
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  maxAge: 43200
+  maxAge: 43200,
 }));
 
-// Optional: Explicit handling of OPTIONS requests (preflight)
 app.options("*", cors());
-
-// Multer error handler (e.g., file upload issues)
-app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ message: `Multer error: ${err.message}` });
-  } else if (err) {
-    return res.status(400).json({ message: err.message });
-  }
-  next();
-});
 
 // Routes
 const userAuthRoutes = require("./routes/userRouter");
@@ -64,7 +55,29 @@ app.use("/api/seller/auth", sellerAuthRoutes);
 app.use("/api/categories", categoryRoutes);
 
 app.use("*", (req, res) => {
-  res.status(404).json({ message: "API route not foundd" });
+  res.status(404).json({ message: "API route not found" });
+});
+
+// 404 handler above returns JSON; anything that reaches this point threw.
+// Must be registered AFTER the routes so it can see their errors.
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ message: `Upload error: ${err.message}` });
+  }
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({ message: "Request body too large" });
+  }
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ message: "Invalid JSON in request body" });
+  }
+  if (err.name === "CastError") {
+    return res.status(400).json({ message: "Invalid identifier supplied" });
+  }
+  console.error("Unhandled error:", err);
+  res.status(err.status || 500).json({
+    message: "Internal server error",
+    ...(process.env.NODE_ENV !== "production" ? { error: err.message } : {}),
+  });
 });
 
 module.exports = app;

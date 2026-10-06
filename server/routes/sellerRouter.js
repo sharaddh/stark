@@ -103,7 +103,7 @@ router.post(
         password,
         role: 'seller',
         profilePicture: profilePictureUrl,
-        status: 'disable',
+        status: 'pending',
       });
 
       await seller.save();

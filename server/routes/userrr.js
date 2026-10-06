@@ -1594,12 +1594,20 @@ router.post('/checkout/:productId', userLoggedin, async (req, res) => {
 
     order.stockDeducted = true;
     await order.save();
-    await Product.updateOne({ _id: productId }, { $inc: { quantity: -quantity } });
+    // Conditional decrement: never drive stock negative; roll the order back if sold out.
+    const stockUpdate = await Product.updateOne(
+      { _id: productId, quantity: { $gte: qty } },
+      { $inc: { quantity: -qty } }
+    );
+    if (stockUpdate.modifiedCount === 0) {
+      await Order.deleteOne({ _id: order._id });
+      return res.status(400).json({ message: 'Requested quantity exceeds available stock' });
+    }
     await Seller.updateOne({ _id: product.sellerId }, { $inc: { totalOrders: 1 } });
 
     res.status(200).json({
       orderId: order.orderId,
-      amount: total,
+      amount: priced.lineTotal,
       productName: product.name,
       message: 'Order created, proceed to payment',
     });

@@ -698,6 +698,9 @@ router.get('/order/:orderId', userLoggedin, async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
+    if (order.userId && order.userId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
     res.status(200).json({ order });
   } catch (error) {
     console.error('Fetch Order Error:', error);
@@ -708,8 +711,8 @@ router.get('/order/:orderId', userLoggedin, async (req, res) => {
 // Fetch all orders for the user (assuming customer-specific filtering)
 router.get('/orders', userLoggedin, async (req, res) => {
   try {
-    // Assuming you want orders linked to the logged-in user; adjust filtering as needed
-    const orders = await Order.find({ 'customer.email': req.user.email }); // Filter by customer's email
+    // Fetch only the logged-in user's orders
+    const orders = await Order.find({ userId: req.user.id });
     res.status(200).json({ orders });
   } catch (error) {
     console.error('Fetch Orders Error:', error);

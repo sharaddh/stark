@@ -58,10 +58,25 @@ const validateRequiredFields = (fields) => (req, res, next) => {
   next();
 };
 
-// Admin Creation
-router.post('/create', async (req, res) => {
+// Admin Creation — only allowed to bootstrap the very first admin.
+// After that, admins must be created by an already-authenticated admin.
+const bootstrapOrAdmin = async (req, res, next) => {
+  try {
+    const adminCount = await Admin.countDocuments();
+    if (adminCount === 0) return next(); // first admin: allow unauthenticated bootstrap
+
+    return adminLoggedin(req, res, next);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+router.post('/create', bootstrapOrAdmin, async (req, res) => {
   try {
     const { phoneNumber, email, name, password } = req.body;
+    if (password && String(password).length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
     if (!phoneNumber || !password || !name) {
       return res.status(400).json({ success: false, message: 'Phone number, name, and password are required' });
     }

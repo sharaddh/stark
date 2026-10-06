@@ -955,7 +955,7 @@ router.get('/recently-viewed', userLoggedin, async (req, res) => {
     console.error('Fetch Recently Viewed Error:', {
       message: error.message,
       stack: error.stack,
-      userId,
+      userId: req.user?._id,
     });
     res.status(500).json({ message: 'Failed to fetch recently viewed products', error: error.message });
   }

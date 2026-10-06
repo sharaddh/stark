@@ -830,9 +830,10 @@ router.post('/create-order', userLoggedin, async (req, res) => {
 });
 
 router.post('/verify-payment', userLoggedin, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session;
   try {
+    session = await mongoose.startSession();
+    session.startTransaction();
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData } = req.body;
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !orderData) {
       return sendResponse(res, 400, { success: false, message: 'Payment details and order data are required' });
@@ -897,11 +898,13 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
       orderId: order._id,
     });
   } catch (error) {
-    await session.abortTransaction();
+    if (session) {
+      try { await session.abortTransaction(); } catch (_) { /* already aborted */ }
+    }
     console.error('Verify Payment Error:', error);
     sendResponse(res, 500, { success: false, message: 'Failed to verify payment', error: error.message });
   } finally {
-    session.endSession();
+    if (session) session.endSession();
   }
 });
 router.post('/place-order', userLoggedin, async (req, res) => {
@@ -978,9 +981,10 @@ router.post('/place-order', userLoggedin, async (req, res) => {
 });
 
 router.post('/checkout', userLoggedin, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session;
   try {
+    session = await mongoose.startSession();
+    session.startTransaction();
     const user = await User.findById(req.user.id).populate('cart.productId').session(session);
     if (!user) {
       return sendResponse(res, 404, { success: false, message: 'User not found' });
@@ -1028,18 +1032,21 @@ router.post('/checkout', userLoggedin, async (req, res) => {
     await session.commitTransaction();
     sendResponse(res, 200, { success: true, message: 'Checkout successful', total, orderId: order._id });
   } catch (error) {
-    await session.abortTransaction();
+    if (session) {
+      try { await session.abortTransaction(); } catch (_) { /* already aborted */ }
+    }
     console.error('Checkout Error:', error);
     sendResponse(res, 500, { success: false, message: 'Failed to process checkout', error: error.message });
   } finally {
-    session.endSession();
+    if (session) session.endSession();
   }
 });
 
 router.post('/checkout/:productId', userLoggedin, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session;
   try {
+    session = await mongoose.startSession();
+    session.startTransaction();
     const productId = req.params.productId;
     const { quantity } = req.body;
 
@@ -1091,11 +1098,13 @@ router.post('/checkout/:productId', userLoggedin, async (req, res) => {
       message: 'Order created, proceed to payment',
     });
   } catch (error) {
-    await session.abortTransaction();
+    if (session) {
+      try { await session.abortTransaction(); } catch (_) { /* already aborted */ }
+    }
     console.error('Checkout Error:', error);
     sendResponse(res, 500, { success: false, message: 'Failed to initiate checkout', error: error.message });
   } finally {
-    session.endSession();
+    if (session) session.endSession();
   }
 });
 

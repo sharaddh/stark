@@ -11,6 +11,11 @@ const app = express();
 connectDB();
 
 app.disable("x-powered-by");
+// We sit behind a reverse proxy in production; without this, rate limiting
+// would key on the proxy IP and let everyone share one bucket.
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 

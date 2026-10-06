@@ -13,6 +13,7 @@ const { sendOtp, verifyOtp } = require('../utils/otp');
 const userLoggedin = require('../middleware/userLoggedin');
 const { uploadSingle } = require('../config/multerConfig');
 const { uploadToCloudinary } = require('../config/cloudinaryConfig');
+const { otpSendLimiter, otpVerifyLimiter, loginLimiter } = require('../middleware/rateLimit');
 
 // Environment Variables
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -31,7 +32,7 @@ const sendResponse = (res, status, data) => {
 };
 
 // Authentication Routes
-router.post('/send-otp', async (req, res) => {
+router.post('/send-otp', otpSendLimiter, async (req, res) => {
   const { phoneNumber } = req.body;
   if (!phoneNumber) {
     return sendResponse(res, 400, { success: false, message: 'Phone number is required' });
@@ -46,7 +47,7 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpVerifyLimiter, async (req, res) => {
   const { phoneNumber, otp } = req.body;
   if (!phoneNumber || !otp) {
     return sendResponse(res, 400, { success: false, message: 'Phone number and OTP are required' });

@@ -21,6 +21,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // Escape user input before it is used in a RegExp (prevents ReDoS / SyntaxError)
 const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const { loginLimiter } = require('../middleware/rateLimit');
+
 // Multer setup
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -104,7 +106,7 @@ router.post('/create', bootstrapOrAdmin, async (req, res) => {
 });
 
 // Admin Login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { phoneNumber, password } = req.body;
     if (!phoneNumber || !password) {

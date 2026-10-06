@@ -16,6 +16,7 @@ const { sendOtp, verifyOtp } = require('../utils/otp');
 const userLoggedin = require('../middleware/userLoggedin');
 const { uploadSingle } = require('../config/multerConfig');
 const { uploadToCloudinary } = require('../config/cloudinaryConfig');
+const { otpSendLimiter, otpVerifyLimiter, loginLimiter } = require('../middleware/rateLimit');
 const SponsoredProduct = require('../models/SponsoredProductModel');
 
 
@@ -153,7 +154,7 @@ const indexData = async () => {
 if (elasticsearch) indexData();
 
 // Authentication Routes
-router.post('/send-otp', async (req, res) => {
+router.post('/send-otp', otpSendLimiter, async (req, res) => {
   const { phoneNumber } = req.body;
   if (!phoneNumber) return res.status(400).json({ message: 'Phone number is required' });
 
@@ -166,7 +167,7 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpVerifyLimiter, async (req, res) => {
   const { phoneNumber, otp } = req.body;
   if (!phoneNumber || !otp) return res.status(400).json({ message: 'Phone number and OTP are required' });
 
@@ -200,7 +201,7 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-router.post('/login-register', async (req, res) => {
+router.post('/login-register', loginLimiter, async (req, res) => {
   const { phoneNumber, pin } = req.body;
   if (!phoneNumber || !pin) return res.status(400).json({ message: 'Phone number and PIN are required' });
   if (!/^\d{6}$/.test(pin)) return res.status(400).json({ message: 'PIN must be a 6-digit number' });

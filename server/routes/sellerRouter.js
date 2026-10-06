@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const Seller = require('../models/sellerModel');
 const Product = require('../models/productModel');
@@ -10,6 +10,7 @@ const authenticateToken = require('../middleware/auth');
 const { uploadSingle, uploadMultiple } = require('../config/multerConfig');
 const { uploadToCloudinary } = require('../config/cloudinaryConfig');
 const mongoose = require('mongoose');
+const { otpSendLimiter, otpVerifyLimiter, loginLimiter } = require('../middleware/rateLimit');
 require('dotenv').config();
 
 // Utility function to generate JWT token
@@ -34,7 +35,7 @@ const validateRequiredFields = (fields) => (req, res, next) => {
 };
 
 // Send OTP
-router.post('/send-otp', validateRequiredFields(['phoneNumber']), async (req, res) => {
+router.post('/send-otp', otpSendLimiter, validateRequiredFields(['phoneNumber']), async (req, res) => {
   const { phoneNumber } = req.body;
 
   try {
@@ -64,6 +65,7 @@ router.post('/send-otp', validateRequiredFields(['phoneNumber']), async (req, re
 // Register Seller
 router.post(
   '/register',
+  otpVerifyLimiter,
   uploadSingle('profilePicture'),
   validateRequiredFields(['phoneNumber', 'otp', 'name', 'shopName', 'address', 'password', 'profilePicture']),
   async (req, res) => {
@@ -136,7 +138,7 @@ router.post(
 );
 
 // Login Seller
-router.post('/login', validateRequiredFields(['phoneNumber', 'password']), async (req, res) => {
+router.post('/login', loginLimiter, validateRequiredFields(['phoneNumber', 'password']), async (req, res) => {
   const { phoneNumber, password } = req.body;
 
   try {
@@ -185,62 +187,6 @@ router.post('/login', validateRequiredFields(['phoneNumber', 'password']), async
     });
   }
 });
-
-// Temporary Seller Registration Without OTP or Profile Picture
-router.post(
-  '/temp-register',
-  validateRequiredFields(['phoneNumber', 'name', 'shopName', 'address', 'password']),
-  async (req, res) => {
-    const { phoneNumber, name, shopName, address, password } = req.body;
-
-    try {
-      const existingSeller = await Seller.findOne({ phoneNumber });
-      if (existingSeller) {
-        return res.status(400).json({
-          success: false,
-          message: 'Phone number already registered',
-        });
-      }
-
-      const seller = new Seller({
-        phoneNumber,
-        name: name.trim(),
-        shopName: shopName.trim(),
-        address: address.trim(),
-        password,
-        role: 'seller',
-        profilePicture: '',
-        status: 'disabled',
-      });
-
-      await seller.save();
-      const token = generateToken(seller._id, seller.phoneNumber);
-
-      res.status(201).json({
-        success: true,
-        message: 'Temporary seller registered successfully',
-        data: {
-          seller: {
-            id: seller._id,
-            name: seller.name,
-            phoneNumber: seller.phoneNumber,
-            role: seller.role,
-            profilePicture: seller.profilePicture,
-            status: seller.status,
-          },
-          token,
-        },
-      });
-    } catch (error) {
-      console.error('Temporary registration error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Server error during temporary registration',
-        error: error.message,
-      });
-    }
-  }
-);
 
 // Get Categories
 router.get('/categories', authenticateToken, async (req, res) => {

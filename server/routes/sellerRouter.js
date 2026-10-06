@@ -854,12 +854,13 @@ router.get('/products/search', authenticateToken, async (req, res) => {
     }
 
     const { name } = req.query;
+    const safe = String(name ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const products = await Product.find({
       sellerId: req.seller.id,
       $or: [
-        { name: { $regex: name, $options: 'i' } },
-        { description: { $regex: name, $options: 'i' } },
-        { brand: { $regex: name, $options: 'i' } },
+        { name: { $regex: safe, $options: 'i' } },
+        { description: { $regex: safe, $options: 'i' } },
+        { brand: { $regex: safe, $options: 'i' } },
       ],
     }).populate('category', 'name');
 

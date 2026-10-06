@@ -18,6 +18,9 @@ require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
+// Escape user input before it is used in a RegExp (prevents ReDoS / SyntaxError)
+const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // Multer setup
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -172,8 +175,8 @@ router.get('/sellers/search', adminLoggedin, async (req, res) => {
 
     const sellers = await Seller.find({
       $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { shopName: { $regex: query, $options: 'i' } },
+        { name: { $regex: escapeRegex(query), $options: 'i' } },
+        { shopName: { $regex: escapeRegex(query), $options: 'i' } },
       ],
     })
       .populate({ path: 'products', select: 'name price status' })
@@ -253,7 +256,7 @@ router.get('/products/search', adminLoggedin, async (req, res) => {
     }
 
     const products = await Product.find({
-      name: { $regex: query, $options: 'i' },
+      name: { $regex: escapeRegex(query), $options: 'i' },
     })
       .populate('sellerId', 'name shopName')
       .populate('category', 'name');
@@ -658,6 +661,32 @@ router.get('/orders', adminLoggedin, async (req, res) => {
   }
 });
 
+// Search Orders (must be before /orders/:id-style routes)
+router.get('/orders/search', adminLoggedin, async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) {
+      return res.status(400).json({ success: false, message: 'Search query is required' });
+    }
+    const safe = escapeRegex(query);
+    const orders = await Order.find({
+      $or: [
+        { orderId: { $regex: safe, $options: 'i' } },
+        { 'customer.name': { $regex: safe, $options: 'i' } },
+        { 'customer.phoneNumber': { $regex: safe, $options: 'i' } },
+      ],
+    })
+      .populate('sellerId', 'name shopName')
+      .populate('userId', 'firstName email')
+      .populate('items.productId', 'name images')
+      .limit(100);
+    res.status(200).json({ success: true, orders });
+  } catch (error) {
+    console.error('Search orders error:', { message: error.message, stack: error.stack });
+    res.status(500).json({ success: false, message: 'Failed to search orders', error: error.message });
+  }
+});
+
 // Update Order Status
 router.put('/orders/:id', adminLoggedin, async (req, res) => {
   try {
@@ -737,9 +766,10 @@ router.get('/users/search', adminLoggedin, async (req, res) => {
 
     const users = await User.find({
       $or: [
-        { firstName: { $regex: query, $options: 'i' } },
-        { lastName: { $regex: query, $options: 'i' } },
-        { email: { $regex: query, $options: 'i' } },
+        { firstName: { $regex: escapeRegex(query), $options: 'i' } },
+        { lastName: { $regex: escapeRegex(query), $options: 'i' } },
+        { email: { $regex: escapeRegex(query), $options: 'i' } },
+        { phoneNumber: { $regex: escapeRegex(query), $options: 'i' } },
       ],
     })
       .populate({ path: 'wishlist.productId', select: 'name price' })
@@ -1337,6 +1367,23 @@ router.put('/combo-offers/:id', adminLoggedin, async (req, res) => {
   }
 });
 
+// Search Combo Offers — must be registered BEFORE /combo-offers/:id
+router.get('/combo-offers/search', adminLoggedin, async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Name query parameter is required' });
+    }
+    const comboOffers = await ComboOffer.find({
+      name: { $regex: escapeRegex(String(name)), $options: 'i' },
+    }).populate('products', 'name price images');
+    res.status(200).json({ success: true, comboOffers });
+  } catch (error) {
+    console.error('Error searching combo offers:', { message: error.message, stack: error.stack });
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // Get Single Combo Offer
 router.get('/combo-offers/:id', async (req, res) => {
   try {
@@ -1352,23 +1399,6 @@ router.get('/combo-offers/:id', async (req, res) => {
     res.status(200).json({ success: true, comboOffer });
   } catch (error) {
     console.error('Error fetching combo offer:', { message: error.message, stack: error.stack });
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// Search Combo Offers
-router.get('/combo-offers/search', adminLoggedin, async (req, res) => {
-  try {
-    const { name } = req.query;
-    if (!name) {
-      return res.status(400).json({ success: false, message: 'Name query parameter is required' });
-    }
-    const comboOffers = await ComboOffer.find({
-      name: { $regex: name, $options: 'i' },
-    }).populate('products', 'name price images');
-    res.status(200).json({ success: true, comboOffers });
-  } catch (error) {
-    console.error('Error searching combo offers:', { message: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

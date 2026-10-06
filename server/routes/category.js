@@ -7,6 +7,10 @@ const authMiddleware = require('../middleware/auth'); // Authentication middlewa
 const adminMiddleware = require('../middleware/adminLoggedin'); // Admin middleware
 const { uploadSingle } = require('../config/multerConfig'); // Multer config for single file upload
 const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinaryConfig'); // Cloudinary config
+const mongoose = require('mongoose');
+
+// Escape user input before it is used in a RegExp (prevents ReDoS / SyntaxError)
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Helper function to extract Cloudinary public ID from URL (for deletion)
 const getCloudinaryPublicId = (url) => {
@@ -27,9 +31,32 @@ router.get('/' , async (req, res) => {
   }
 });
  
+// Search categories by name (must be registered BEFORE /:id or it gets shadowed)
+router.get('/search' , async (req, res) => {
+  const { name } = req.query;
+
+  if (!name) {
+    return res.status(400).json({ message: 'Search query (name) is required' });
+  }
+
+  try {
+    const categories = await Category.find({
+      name: { $regex: escapeRegex(String(name)), $options: 'i' }, // Case-insensitive search
+    }).select('name description icon'); // Include icon field
+    res.status(200).json({ categories });
+  } catch (error) {
+    console.error('Search Categories Error:', error);
+    res.status(500).json({ message: 'Failed to search categories', error: error.message });
+  }
+});
+
 // Get a single category by ID (Accessible to all authenticated users)
 router.get('/:id' , async (req, res) => {
   const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: 'Invalid category ID' });
+  }
 
   try {
     const category = await Category.findById(id).select('name description icon'); // Include icon field
@@ -40,25 +67,6 @@ router.get('/:id' , async (req, res) => {
   } catch (error) {
     console.error('Fetch Category Error:', error);
     res.status(500).json({ message: 'Failed to fetch category', error: error.message });
-  }
-});
-
-// Search categories by name (Accessible to all authenticated users)
-router.get('/search' , async (req, res) => {
-  const { name } = req.query;
-
-  if (!name) {
-    return res.status(400).json({ message: 'Search query (name) is required' });
-  }
-
-  try {
-    const categories = await Category.find({
-      name: { $regex: name, $options: 'i' }, // Case-insensitive search
-    }).select('name description icon'); // Include icon field
-    res.status(200).json({ categories });
-  } catch (error) {
-    console.error('Search Categories Error:', error);
-    res.status(500).json({ message: 'Failed to search categories', error: error.message });
   }
 });
 
@@ -171,43 +179,7 @@ router.put('/:id' , adminMiddleware, uploadSingle('icon'), async (req, res) => {
   }
 });
 
-// Delete a category (Admin only)
-router.delete('/:id' , adminMiddleware, async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const category = await Category.findById(id);
-    if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
-    }
-
-    // Check if any products are using this category
-    const products = await Product.find({ category: id });
-    if (products.length > 0) {
-      return res.status(400).json({
-        message: 'Cannot delete category with associated products',
-        productCount: products.length,
-      });
-    }
-
-    // Delete the icon from Cloudinary (if it exists)
-    if (category.icon) {
-      const publicId = getCloudinaryPublicId(category.icon);
-      if (publicId) {
-        await deleteFromCloudinary(publicId);
-        console.log('Deleted icon from Cloudinary:', publicId);
-      }
-    }
-
-    await Category.findByIdAndDelete(id);
-    res.status(200).json({ message: 'Category deleted successfully' });
-  } catch (error) {
-    console.error('Category Deletion Error:', error);
-    res.status(500).json({ message: 'Failed to delete category', error: error.message });
-  }
-});
-
-// Bulk delete categories (Admin only)
+// Bulk delete categories (Admin only) — must be registered BEFORE /:id
 router.delete('/bulk' , adminMiddleware, async (req, res) => {
   const { categoryIds } = req.body;
 
@@ -219,6 +191,9 @@ router.delete('/bulk' , adminMiddleware, async (req, res) => {
     // Check for associated products for each category
     const categoriesWithProducts = [];
     for (const id of categoryIds) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: `Invalid category ID: ${id}` });
+      }
       const products = await Product.find({ category: id });
       if (products.length > 0) {
         categoriesWithProducts.push({ id, productCount: products.length });
@@ -249,6 +224,46 @@ router.delete('/bulk' , adminMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Bulk Category Deletion Error:', error);
     res.status(500).json({ message: 'Failed to delete categories', error: error.message });
+  }
+});
+
+// Delete a category (Admin only)
+router.delete('/:id' , adminMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: 'Invalid category ID' });
+  }
+
+  try {
+    const category = await Category.findById(id);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    // Check if any products are using this category
+    const products = await Product.find({ category: id });
+    if (products.length > 0) {
+      return res.status(400).json({
+        message: 'Cannot delete category with associated products',
+        productCount: products.length,
+      });
+    }
+
+    // Delete the icon from Cloudinary (if it exists)
+    if (category.icon) {
+      const publicId = getCloudinaryPublicId(category.icon);
+      if (publicId) {
+        await deleteFromCloudinary(publicId);
+        console.log('Deleted icon from Cloudinary:', publicId);
+      }
+    }
+
+    await Category.findByIdAndDelete(id);
+    res.status(200).json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    console.error('Category Deletion Error:', error);
+    res.status(500).json({ message: 'Failed to delete category', error: error.message });
   }
 });
 

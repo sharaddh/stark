@@ -264,14 +264,20 @@ router.get('/products', async (req, res) => {
     let query = {};
 
     if (category && category.toLowerCase() !== 'all') {
-      const categoryDoc = await Category.findOne({ name: { $regex: new RegExp(`^${category}$`, 'i') } });
+      const safeCategory = String(category).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const categoryDoc = await Category.findOne({ name: { $regex: new RegExp(`^${safeCategory}$`, 'i') } });
       if (!categoryDoc) {
         return sendResponse(res, 404, { success: false, message: `Category '${category}' not found` });
       }
       query.category = categoryDoc._id;
     }
 
-    if (sellerId) query.sellerId = sellerId;
+    if (sellerId) {
+      if (!mongoose.Types.ObjectId.isValid(sellerId)) {
+        return sendResponse(res, 400, { success: false, message: 'Invalid seller ID' });
+      }
+      query.sellerId = sellerId;
+    }
 
     const products = await Product.find(query)
       .populate('sellerId', 'name phoneNumber')

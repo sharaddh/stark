@@ -16,7 +16,7 @@ const { uploadToCloudinary } = require('../config/cloudinaryConfig');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const { JWT_SECRET } = require('../config/secrets');
 
 // Escape user input before it is used in a RegExp (prevents ReDoS / SyntaxError)
 const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

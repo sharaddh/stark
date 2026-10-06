@@ -78,8 +78,7 @@
 
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/adminModel');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const { JWT_SECRET } = require('../config/secrets');
 
 const adminLoggedin = async (req, res, next) => {
   try {

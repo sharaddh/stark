@@ -32,7 +32,7 @@
 
 const jwt = require('jsonwebtoken');
 const Seller = require('../models/sellerModel');
-require('dotenv').config();
+const { JWT_SECRET } = require('../config/secrets');
 
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -44,7 +44,7 @@ const authenticateToken = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     const seller = await Seller.findById(decoded.id).select('-password');
     if (!seller) {
       return res.status(404).json({ success: false, message: 'Seller not found' });

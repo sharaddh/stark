@@ -16,15 +16,11 @@ const { uploadToCloudinary } = require('../config/cloudinaryConfig');
 const { otpSendLimiter, otpVerifyLimiter, loginLimiter } = require('../middleware/rateLimit');
 
 // Environment Variables
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'YOUR_RAZORPAY_KEY_ID';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'YOUR_RAZORPAY_KEY_SECRET';
+const { JWT_SECRET, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, razorpayConfigured } = require('../config/secrets');
 
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: RAZORPAY_KEY_ID,
-  key_secret: RAZORPAY_KEY_SECRET,
-});
+// Initialize Razorpay only when credentials exist; otherwise payment routes
+// respond 503 instead of crashing the whole process at module load.
+const razorpay = razorpayConfigured ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET }) : null;
 
 // Middleware for consistent response structure
 const sendResponse = (res, status, data) => {
@@ -770,6 +766,9 @@ router.post('/create-order', userLoggedin, async (req, res) => {
 
     // Handle payment and order creation
     if (paymentMethod === 'Razorpay') {
+      if (!razorpay) {
+        return res.status(503).json({ message: 'Payments are temporarily unavailable' });
+      }
       const razorpayOptions = {
         amount: totalAmount * 100, // Convert to paise
         currency: 'INR',
@@ -847,6 +846,10 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
     }
 
     const { items, totalAmount, userDetails, addressId, paymentMethod } = orderData;
+
+    if (!RAZORPAY_KEY_SECRET) {
+      return sendResponse(res, 503, { success: false, message: 'Payments are temporarily unavailable' });
+    }
 
     const generatedSignature = crypto
       .createHmac('sha256', RAZORPAY_KEY_SECRET)

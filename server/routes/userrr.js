@@ -25,15 +25,17 @@ const ComboOffer = require('../models/ComboOfferModel'); // Import ComboOffer mo
 const Admin = require('../models/adminModel'); // Import Admin model
 
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const { JWT_SECRET, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, razorpayConfigured } = require('../config/secrets');
 
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: RAZORPAY_KEY_ID,
-  key_secret: RAZORPAY_KEY_SECRET,
-});
+// Initialize Razorpay only when credentials exist; otherwise payment routes
+// respond 503 instead of crashing the whole process at module load.
+const razorpay = razorpayConfigured ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET }) : null;
+
+const requireRazorpay = (res) => {
+  if (razorpay) return true;
+  res.status(503).json({ message: 'Payments are temporarily unavailable' });
+  return false;
+};
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -1087,6 +1089,7 @@ router.post('/create-order', userLoggedin, async (req, res) => {
     // Create Razorpay order if needed
     let razorpayOrder = null;
     if (paymentMethod === 'Razorpay' || paymentMethod === 'Split Payment') {
+      if (!requireRazorpay(res)) return;
       if (!(amountDueOnline > 0)) {
         return res.status(400).json({ message: 'Online amount must be greater than zero for Razorpay or Split Payment' });
       }
@@ -1161,6 +1164,7 @@ router.post('/create-order', userLoggedin, async (req, res) => {
 
 router.post('/verify-payment', userLoggedin, async (req, res) => {
   try {
+    if (!requireRazorpay(res)) return;
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData } = req.body;
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !orderData) {
       return res.status(400).json({ success: false, message: 'Payment details and order data are required' });

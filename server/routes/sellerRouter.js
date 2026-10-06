@@ -11,11 +11,12 @@ const { uploadSingle, uploadMultiple } = require('../config/multerConfig');
 const { uploadToCloudinary } = require('../config/cloudinaryConfig');
 const mongoose = require('mongoose');
 const { otpSendLimiter, otpVerifyLimiter, loginLimiter } = require('../middleware/rateLimit');
+const { JWT_SECRET } = require('../config/secrets');
 require('dotenv').config();
 
 // Utility function to generate JWT token
 const generateToken = (id, phoneNumber) => {
-  return jwt.sign({ id, phoneNumber }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ id, phoneNumber }, JWT_SECRET, { expiresIn: '7d' });
 };
 
 // Input validation middleware

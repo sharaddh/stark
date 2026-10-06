@@ -62,7 +62,8 @@ const formatAddress = (address) =>
 // onlineAmount / codAmount for display convenience, but those values are attacker
 // controlled and must never reach the order record or the Razorpay charge.
 const buildPricedLine = (product, quantity, paymentMethod) => {
-  const lineTotal = round2(product.price * quantity);
+  const unitPrice = productPrice(product);
+  const lineTotal = round2(unitPrice * quantity);
   const codAllowed = Boolean(product.isCashOnDeliveryAvailable);
   const onlinePct = codAllowed
     ? Math.min(Math.max(product.onlinePaymentPercentage ?? 100, 0), 100)
@@ -82,7 +83,7 @@ const buildPricedLine = (product, quantity, paymentMethod) => {
     codAmount = round2(lineTotal - onlineAmount);
   }
 
-  return { price: product.price, lineTotal, onlineAmount, codAmount };
+  return { price: unitPrice, lineTotal, onlineAmount, codAmount };
 };
 
 // Optional Elasticsearch Client

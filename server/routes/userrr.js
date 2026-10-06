@@ -332,6 +332,9 @@ router.get('/products', async (req, res) => {
     }
 
     if (sellerId) {
+      if (!mongoose.Types.ObjectId.isValid(sellerId)) {
+        return res.status(400).json({ message: 'Invalid seller ID' });
+      }
       query.sellerId = sellerId;
     }
 
@@ -1621,13 +1624,22 @@ router.post('/checkout/:productId', userLoggedin, async (req, res) => {
 router.get('/productss', async (req, res) => {
   try {
     const { category, gender, brand, excludeProductId, limit, random } = req.query;
-    let query = {
-      ...(category && { category }),
-      ...(gender && { gender }),
-      ...(brand && { brand }),
-      ...(excludeProductId && { _id: { $ne: excludeProductId } }),
-      status: 'enabled',
-    };
+    let query = { status: 'enabled' };
+
+    // Only allow scalar string filters -- reject object-style ($ne etc) injection
+    const scalarStr = (v) => typeof v === 'string' && v.length > 0;
+    if (scalarStr(category)) query.category = category;
+    if (scalarStr(gender)) query.gender = gender;
+    if (scalarStr(brand)) query.brand = brand;
+
+    let excludeId = null;
+    if (scalarStr(excludeProductId)) {
+      if (!mongoose.Types.ObjectId.isValid(excludeProductId)) {
+        return res.status(400).json({ message: 'Invalid excludeProductId' });
+      }
+      excludeId = excludeProductId;
+      query._id = { $ne: excludeId };
+    }
 
     let products = await Product.find(query)
       .limit(parseInt(limit) || 10)
@@ -1636,7 +1648,7 @@ router.get('/productss', async (req, res) => {
 
     if (products.length === 0 || random === 'true') {
       products = await Product.aggregate([
-        { $match: { status: 'enabled', _id: { $ne: excludeProductId } } },
+        { $match: { status: 'enabled', ...(excludeId && { _id: { $ne: excludeId } }) } },
         { $sample: { size: parseInt(limit) || 10 } },
       ]);
       products = await Product.populate(products, [

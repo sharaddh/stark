@@ -1,4 +1,4 @@
-// // const multer = require('multer');
+﻿// // const multer = require('multer');
 
 // // const storage = multer.memoryStorage(); // Store in memory, not disk
 
@@ -44,8 +44,7 @@
 //   }).single(fieldName);
 
 //   return (req, res, next) => {
-//     console.log('Multer Middleware - req.headers:', req.headers);
-//     if (!req || !req.headers) {
+// //     if (!req || !req.headers) {
 //       console.error('Multer Error: req or req.headers is undefined');
 //       return res.status(500).json({ success: false, message: 'Internal server error: Request headers are undefined' });
 //     }
@@ -91,7 +90,6 @@ const uploadSingle = (fieldName) => {
   }).single(fieldName);
 
   return (req, res, next) => {
-    console.log('Multer Middleware - req.headers:', req.headers);
     if (!req || !req.headers) {
       console.error('Multer Error: req or req.headers is undefined');
       return res.status(500).json({ success: false, message: 'Internal server error: Request headers are undefined' });
@@ -120,7 +118,6 @@ const uploadMultiple = (fieldName, maxCount = 10) => {
   }).array(fieldName, maxCount);
 
   return (req, res, next) => {
-    console.log('Multer Middleware - req.headers:', req.headers);
     if (!req || !req.headers) {
       console.error('Multer Error: req or req.headers is undefined');
       return res.status(500).json({ success: false, message: 'Internal server error: Request headers are undefined' });

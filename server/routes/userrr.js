@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
@@ -1156,7 +1156,7 @@ router.post('/create-order', userLoggedin, async (req, res) => {
     console.error('Create Order Error:', {
       message: error.message,
       stack: error.stack,
-      requestBody: req.body,
+      // req.body is not logged: it can contain addresses and payment details.
     });
     res.status(500).json({ message: 'Failed to create order', error: error.message });
   }
@@ -1280,7 +1280,7 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
     console.error('Verify Payment Error:', {
       message: error.message,
       stack: error.stack,
-      requestBody: req.body,
+      // req.body is not logged: it can contain addresses and payment details.
     });
     res.status(500).json({ success: false, message: 'Failed to verify payment', error: error.message });
   }
@@ -2187,17 +2187,17 @@ router.get('/initial-data', optionalUserLogin, async (req, res) => {
     ]);
 
     // Sanitize combo offers
-    console.log('ðŸ§ª Raw Combo Offers:', comboOffersRaw.length);
+    console.log('Ã°Å¸Â§Âª Raw Combo Offers:', comboOffersRaw.length);
     const comboOffers = comboOffersRaw.filter(o => {
       const valid = o.products?.length >= 2;
-      if (!valid) console.log('âŒ Skipped combo (less than 2 valid products):', o._id);
+      if (!valid) console.log('Ã¢ÂÅ’ Skipped combo (less than 2 valid products):', o._id);
       return valid;
     }).map(o => ({
       ...o,
       image: getFirstImage(o.images, getFirstImage(o.products?.[0]?.images, DEFAULTS.COMBO_IMAGE)),
       products: sanitizeProducts(o.products),
     }));
-    console.log('âœ… Final sanitized comboOffers:', comboOffers.length);
+    console.log('Ã¢Å“â€¦ Final sanitized comboOffers:', comboOffers.length);
 
     // Sanitize ads with corrected casing
     const ads = ['singleadd', 'doubleadd', 'tripleadd'].map(type => ({
@@ -2207,7 +2207,7 @@ router.get('/initial-data', optionalUserLogin, async (req, res) => {
         url: sanitizeImage(i.url, DEFAULTS.AD_IMAGE)
       }))
     }));
-    console.log('ðŸª§ Ads processed:', ads.map(a => `${a.type}: ${a.images.length}`));
+    console.log('Ã°Å¸ÂªÂ§ Ads processed:', ads.map(a => `${a.type}: ${a.images.length}`));
 
     const banner = {
       url: sanitizeImage(adminAds?.singleadd?.images?.find(i => i?.url?.trim())?.url, DEFAULTS.BANNER_IMAGE)

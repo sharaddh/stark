@@ -143,9 +143,7 @@ router.post('/login', loginLimiter, validateRequiredFields(['phoneNumber', 'pass
   const { phoneNumber, password } = req.body;
 
   try {
-    console.log('Login Attempt:', { phoneNumber, password });
     const seller = await Seller.findOne({ phoneNumber }).select('+password');
-    console.log('Seller Found:', seller ? seller.phoneNumber : 'No seller');
     if (!seller || seller.role !== 'seller') {
       return res.status(404).json({
         success: false,
@@ -154,7 +152,6 @@ router.post('/login', loginLimiter, validateRequiredFields(['phoneNumber', 'pass
     }
 
     const isMatch = await seller.matchPassword(password);
-    console.log('Password Match:', isMatch);
     if (!isMatch) {
       return res.status(401).json({
         success: false,

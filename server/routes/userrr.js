@@ -1239,6 +1239,19 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
       }
     }
 
+    // Idempotency: a retried / replayed verify-payment must not create a second
+    // set of orders or deduct stock twice. paymentId is unique per Razorpay payment.
+    const alreadyProcessed = await Order.find({ paymentId: razorpay_payment_id })
+      .select('orderId sellerId')
+      .lean();
+    if (alreadyProcessed.length > 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'Payment already verified',
+        orders: alreadyProcessed.map((o) => ({ orderId: o.orderId, sellerId: o.sellerId })),
+      });
+    }
+
     // Process orders
     const orders = [];
     for (const tempOrder of tempOrders) {
@@ -1253,11 +1266,17 @@ router.post('/verify-payment', userLoggedin, async (req, res) => {
       await order.save();
       orders.push(order);
 
-      // Update product quantities
+      // Update product quantities. The filter refuses to go below zero, so two
+      // concurrent requests can never oversell the same stock.
+      let stockDeducted = false;
       for (const item of order.items) {
-        await Product.updateOne({ _id: item.productId }, { $inc: { quantity: -item.quantity } });
+        const result = await Product.updateOne(
+          { _id: item.productId, quantity: { $gte: item.quantity } },
+          { $inc: { quantity: -item.quantity } }
+        );
+        if (result.modifiedCount > 0) stockDeducted = true;
       }
-      order.stockDeducted = true;
+      order.stockDeducted = stockDeducted;
       await order.save();
       // Update seller stats
       await Seller.updateOne({ _id: order.sellerId }, { $inc: { totalOrders: 1 } });
@@ -1464,6 +1483,15 @@ router.post('/checkout', userLoggedin, async (req, res) => {
 
     const itemsBySeller = {};
     for (const item of liveCart) {
+      // Reject up-front if stock ran out since the cart was last updated.
+      if (item.productId.quantity < item.quantity) {
+        return res.status(400).json({
+          message: `Insufficient stock for ${item.productId.name}. Only ${item.productId.quantity} left.`,
+        });
+      }
+      if (item.productId.status !== 'enabled') {
+        return res.status(400).json({ message: `${item.productId.name} is no longer available` });
+      }
       const priced = buildPricedLine(item.productId, item.quantity, paymentMethod);
       const sellerId = item.productId.sellerId.toString();
       if (!itemsBySeller[sellerId]) {
@@ -1518,11 +1546,21 @@ router.post('/checkout', userLoggedin, async (req, res) => {
       orders.push(order);
     }
 
+    // Conditional decrement: never drive stock negative.
+    const deducted = [];
     for (const item of liveCart) {
-      await Product.updateOne(
-        { _id: item.productId._id },
+      const result = await Product.updateOne(
+        { _id: item.productId._id, quantity: { $gte: item.quantity } },
         { $inc: { quantity: -item.quantity } }
       );
+      if (result.modifiedCount === 0) {
+        // Roll back the orders already created for this checkout
+        await Order.deleteMany({ _id: { $in: orders.map((o) => o._id) } });
+        return res.status(400).json({
+          message: `Insufficient stock for ${item.productId.name}. Please try again.`,
+        });
+      }
+      deducted.push(item);
     }
     await Order.updateMany({ _id: { $in: orders.map((o) => o._id) } }, { $set: { stockDeducted: true } });
 

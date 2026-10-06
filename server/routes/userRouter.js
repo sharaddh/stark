@@ -324,8 +324,15 @@ router.get('/sellers', async (req, res) => {
 
 router.get('/seller/:sellerId', async (req, res) => {
   try {
-    const seller = await Seller.findById(req.params.sellerId);
-    if (!seller || seller.role !== 'seller') {
+    if (!mongoose.Types.ObjectId.isValid(req.params.sellerId)) {
+      return sendResponse(res, 400, { success: false, message: 'Invalid seller ID' });
+    }
+    // Public storefront fields only -- paymentIds, bank account, IFSC and UPI must
+    // never leave the server on an unauthenticated route.
+    const seller = await Seller.findById(req.params.sellerId)
+      .select('name shopName profilePicture phoneNumber address status')
+      .lean();
+    if (!seller || seller.role !== 'seller' || seller.status !== 'enabled') {
       return sendResponse(res, 404, { success: false, message: 'Seller not found' });
     }
     sendResponse(res, 200, { success: true, seller });

@@ -112,7 +112,7 @@ const DoubleAdd = React.memo(() => {
                     src={image.url}
                     alt={image.alt}
                     loading="lazy"
-                    fetchpriority={pairIndex === currentIndex + 1 ? 'high' : 'auto'}
+                    fetchPriority={pairIndex === currentIndex + 1 ? 'high' : 'auto'}
                     onError={(e) => {
                       if (e.target.src !== DEFAULT_IMAGE) {
                         console.warn(`Failed to load ad image: ${e.target.src}`);

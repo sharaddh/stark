@@ -182,7 +182,7 @@ const ProductForm = ({ editingProduct, setProducts, categories, onClose }) => {
       );
       toast.success(editingProduct ? 'Product updated successfully' : 'Product added successfully');
       onClose();
-    } catch (error) {
+    } catch {
       toast.error(editingProduct ? 'Failed to update product' : 'Failed to add product');
     } finally {
       setIsSubmitting(false);

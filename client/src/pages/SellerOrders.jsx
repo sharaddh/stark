@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 // selleraxios, not '../axios': /api/seller/auth/orders needs sellerToken, and the
@@ -7,7 +6,6 @@ import { motion } from 'framer-motion';
 import axios from '../selleraxios';
 
 const SellerOrders = () => {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 

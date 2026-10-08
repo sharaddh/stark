@@ -8,8 +8,6 @@ import toast, { Toaster } from 'react-hot-toast';
 import ProductCard from '../Components/ProductCard';
 import ProductCardSkeleton from '../Components/ProductCardSkeleton';
 import SearchBar from '../Components/SearchBar';
-import agroLogo from '../assets/logo.png';
-import agrotade from '../assets/logoname.png';
 import { motion } from 'framer-motion';
 import { MdArrowBack, MdLogout } from 'react-icons/md';
 import { FaFilter } from 'react-icons/fa';
@@ -128,12 +126,6 @@ const CategoryPage = () => {
     applyFilters(products);
     toast.success('Filters reset!', { duration: 1500 });
   }, [products, applyFilters]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    toast.success('Logged out successfully');
-    navigate('/login');
-  };
 
   if (loading) {
     return (

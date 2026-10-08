@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import axios from '../axios';
-import { FaPlus, FaEdit, FaTrash, FaSearch, FaCheckSquare, FaSquare, FaImages, FaSpinner, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaSearch, FaCheckSquare, FaSquare, FaImages, FaSpinner, FaEye, FaEyeSlash, FaRedo } from 'react-icons/fa';
 import useAdminAuth from '../../hooks/useAdminAuth';
 
 const fadeIn = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
-const AdminComboOffer = ({ comboOffers = [], setComboOffers, products = [], setProducts, loading: parentLoading }) => {
+const AdminComboOffer = ({ comboOffers = [], setComboOffers, products = [], loading: parentLoading }) => {
   const navigate = useNavigate();
   const { isAdmin, error, checkAdmin } = useAdminAuth();
   const [filteredComboOffers, setFilteredComboOffers] = useState(comboOffers);

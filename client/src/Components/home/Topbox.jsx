@@ -1,5 +1,4 @@
 import React from 'react'
-import slogo from '../../assets/top.jpg'
 import delevery from '../../assets/delivery.png'
 import cod from '../../assets/cod.png'
 import reee from '../../assets/return.png'

@@ -554,7 +554,7 @@ const CheckoutPage = () => {
     }
   };
 
-  const handleOtpPaste = (e, index) => {
+  const handleOtpPaste = (e) => {
     const pastedData = e.clipboardData.getData('text').replace(/\D/g, '');
     if (pastedData.length === 6) {
       const newOtp = pastedData.split('').slice(0, 6);
@@ -638,7 +638,6 @@ const CheckoutPage = () => {
     setPaymentError(null);
 
     const itemsWithPayment = calculatePaymentSplit();
-    const totalOnlineAmount = itemsWithPayment.reduce((sum, item) => sum + item.onlineAmount, 0);
     const totalCODAmount = itemsWithPayment.reduce((sum, item) => sum + item.codAmount, 0);
     const totalAmount = subtotal + shipping;
 
@@ -684,7 +683,7 @@ const CheckoutPage = () => {
         const endpoint = token ? '/api/user/auth/create-order' : '/api/create-order';
         const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
         const orderResponse = await axios.post(endpoint, orderData, config);
-        const { razorpay, orders } = orderResponse.data;
+        const { razorpay } = orderResponse.data;
 
         if (!razorpay || !razorpay.orderId) {
           throw new Error('Razorpay order creation failed');

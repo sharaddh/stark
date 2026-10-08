@@ -1,6 +1,6 @@
 import React from 'react';
 
-const HorizontalProductRow = ({ title, category }) => {
+const HorizontalProductRow = ({ title }) => {
   // Fetch products based on the category
   const products = []; // Replace with API call or props
 

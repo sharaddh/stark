@@ -12,7 +12,7 @@ const ProductSkeleton = () => (
   <div className="w-full h-64 bg-gray-200 rounded-lg animate-pulse" />
 );
 
-const ProductSection = React.memo(({ products = [], filteredProducts = [], setFilteredProducts, onGenderChange, selectedGender }) => {
+const ProductSection = React.memo(({ filteredProducts = [], setFilteredProducts, onGenderChange, selectedGender }) => {
   const { cache, updateCache } = useContext(DataContext);
   const [page, setPage] = useState(1);
   const [isFetching, setIsFetching] = useState(false);
@@ -65,7 +65,7 @@ const ProductSection = React.memo(({ products = [], filteredProducts = [], setFi
       });
 
       setPage((prev) => prev + 1);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load more products');
     } finally {
       setIsFetching(false);

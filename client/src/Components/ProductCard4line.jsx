@@ -27,7 +27,7 @@ const ProductCard = React.memo(({ product = {}, wishlist = [], cart = [], onAddT
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [productDetails, setProductDetails] = useState(null);
-  const [fetchError, setFetchError] = useState(null);
+  const [, setFetchError] = useState(null);
   const navigate = useNavigate();
 
   const { _id } = product;

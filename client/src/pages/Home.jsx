@@ -27,7 +27,7 @@ const componentMap = {
 const DEFAULT_IMAGE = 'https://your-server.com/generic-product-placeholder.jpg';
 
 const Home = React.memo(() => {
-  const { cache = {}, isDataStale = () => true, isLoading } = useContext(DataContext) || {};
+  const { cache = {}, isLoading } = useContext(DataContext) || {};
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [selectedGender, setSelectedGender] = useState('all');

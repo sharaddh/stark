@@ -12,7 +12,6 @@ import smallLogo from '../assets/sslogo.png';
 import { FaHeart, FaShoppingBag } from 'react-icons/fa';
 
 // Animation Variants
-const fadeIn = { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.9, ease: 'easeInOut' } } };
 
 const WishlistPage = React.memo(() => {
   const navigate = useNavigate();

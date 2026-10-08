@@ -122,7 +122,7 @@ const UserDashboard = () => {
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    if (!profile.email.match(/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/)) {
+    if (!profile.email.match(/^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/)) {
       toast.error('Please enter a valid email.', {
         style: { background: '#FF4D4F', color: '#FFFFFF', borderRadius: '12px', padding: '12px' },
       });
@@ -209,7 +209,7 @@ const UserDashboard = () => {
           toast.success('Location fetched successfully! Please save profile.', {
             style: { background: '#FFFFFF', color: '#1F2937', borderRadius: '12px', padding: '12px' },
           });
-        } catch (error) {
+        } catch {
           toast.error('Failed to fetch location data. Please enter manually.', {
             style: { background: '#FF4D4F', color: '#FFFFFF', borderRadius: '12px', padding: '12px' },
           });
@@ -397,7 +397,7 @@ const UserDashboard = () => {
                 {profile.addresses && profile.addresses.length > 0 && profile.addresses[0].street ? (
                   <div className="mt-4 space-y-2">
                     {profile.addresses.map((addr, index) => (
-                      <div className="flex gap-2 text-gray-500">
+                      <div key={index} className="flex gap-2 text-gray-500">
                         <h1>●</h1>
                         <p key={index} className="text-sm text-gray-600 flex items-center gap-2">
                           {`${addr.street}, ${addr.city}, ${addr.state}, ${addr.postalCode}, ${addr.country}`}

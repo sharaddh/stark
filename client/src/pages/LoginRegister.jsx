@@ -345,7 +345,7 @@ const LoginRegister = () => {
     }
   };
 
-  const handlePinPaste = (e, index) => {
+  const handlePinPaste = (e) => {
     const pastedData = e.clipboardData.getData('text').replace(/\D/g, '');
     if (pastedData.length === 6) {
       const newPin = pastedData.split('').slice(0, 6);
@@ -477,7 +477,7 @@ const LoginRegister = () => {
         </CardContent>
       </Card>
 
-      <style jsx>{`
+      <style>{`
         .min-h-screen {
           background: linear-gradient(135deg, #e9d5ff 0%, #ede9fe 50%, #d8b4fe 100%);
         }

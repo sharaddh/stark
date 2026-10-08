@@ -105,7 +105,7 @@ const SingleAdd = React.memo(() => {
                 src={image.url}
                 alt={image.alt}
                 loading="lazy"
-                fetchpriority={index === currentIndex + 1 ? 'high' : 'auto'}
+                fetchPriority={index === currentIndex + 1 ? 'high' : 'auto'}
                 onError={(e) => {
                   if (e.target.src !== DEFAULT_IMAGE) {
                     console.warn(`Failed to load ad image: ${e.target.src}`);

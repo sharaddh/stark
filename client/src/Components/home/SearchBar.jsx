@@ -8,10 +8,6 @@ import agroLogo from '../../assets/slogo.webp';
 import slogo from '../../assets/slogo.webp';
 
 // Animation variants
-const fadeIn = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
-};
 
 const expandVariants = {
   hidden: { opacity: 0, scale: 0.95 },

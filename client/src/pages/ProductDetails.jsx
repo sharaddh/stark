@@ -15,7 +15,7 @@ const ProductDetails = () => {
       try {
         const res = await axios.get(`/api/user/auth/product/${id}`);
         setProduct(res.data);
-      } catch (err) {
+      } catch {
         setError('Product not found');
       } finally {
         setLoading(false);

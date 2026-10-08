@@ -260,7 +260,7 @@ export const fetchCategoryProducts = (categoryId) => async (dispatch) => {
   }
 };
 
-export const fetchSearchSuggestions = (query) => async (dispatch, getState) => {
+export const fetchSearchSuggestions = (query) => async (dispatch) => {
   if (!query.trim()) return;
   dispatch(setFetching(true));
   try {
@@ -318,7 +318,7 @@ export const fetchSearchSuggestions = (query) => async (dispatch, getState) => {
   }
 };
 
-export const fetchTrendingSearches = () => async (dispatch, getState) => {
+export const fetchTrendingSearches = () => async (dispatch) => {
   dispatch(setFetching(true));
   try {
     const userToken = localStorage.getItem('token');

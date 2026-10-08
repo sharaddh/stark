@@ -24,17 +24,17 @@ const Products = ({ products, setProducts, categories, loading }) => {
       await axios.delete(`/api/seller/auth/products/${id}`);
       setProducts(products.filter((p) => p._id !== id));
       toast.success('Product deleted successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete product');
     }
   };
 
-  const handleToggleProductStatus = async (id, currentStatus) => {
+  const handleToggleProductStatus = async (id) => {
     try {
       const response = await axios.put(`/api/seller/auth/products/${id}/toggle-status`);
       setProducts(products.map((p) => (p._id === id ? response.data.data.product : p)));
       toast.success(`Product ${response.data.data.product.status} successfully`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to toggle product status');
     }
   };

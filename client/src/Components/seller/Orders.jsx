@@ -50,7 +50,7 @@ const Orders = ({ orders, setOrders, loading }) => {
         [id]: [...(prev[id] || []), updatedOrder.status].slice(-5), // Keep last 5 statuses
       }));
       toast.success(`Order updated to "${newStatus}"`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to update order status');
     }
   };
@@ -73,7 +73,7 @@ const Orders = ({ orders, setOrders, loading }) => {
         [id]: history.slice(0, -1), // Remove latest status
       }));
       toast.success(`Order reverted to "${previousStatus}"`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to undo status');
     }
   };

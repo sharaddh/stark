@@ -91,7 +91,7 @@ const ProfileForm = ({ seller, setSeller, onClose }) => {
       setSeller(response.data.data.seller);
       toast.success('Profile updated successfully');
       onClose();
-    } catch (error) {
+    } catch {
       toast.error('Failed to update profile');
     }
   };

@@ -11,7 +11,7 @@ const fadeIn = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, tra
 const DEFAULT_IMAGE = 'https://your-server.com/generic-product-placeholder.jpg';
 
 const RecentlyViewedSection = React.memo(() => {
-  const { cache, updateCache } = useContext(DataContext);
+  const { cache } = useContext(DataContext);
   const products = useMemo(() => {
     const recent = cache.recentlyViewed?.data || [];
     return recent.map((product) => ({
@@ -20,36 +20,6 @@ const RecentlyViewedSection = React.memo(() => {
     }));
   }, [cache.recentlyViewed]);
   const scrollRef = useRef(null);
-  const debounceTimeout = useRef(null);
-
-  const trackProductView = useCallback(
-    async (productId) => {
-      try {
-        const userToken = localStorage.getItem('token');
-        let updatedRecent = [...(cache.recentlyViewed?.data || [])];
-        if (userToken) {
-          await axios.post('/api/user/auth/recently-viewed', { productId });
-          updatedRecent = [productId, ...updatedRecent.filter((id) => id !== productId)].slice(0, 10);
-        } else {
-          let cookieViews = Cookies.get('recentlyViewed')
-            ? JSON.parse(Cookies.get('recentlyViewed'))
-            : [];
-          if (!cookieViews.includes(productId)) {
-            cookieViews = [productId, ...cookieViews].slice(0, 10);
-            Cookies.set('recentlyViewed', JSON.stringify(cookieViews), { expires: 7 });
-          }
-          updatedRecent = cookieViews;
-        }
-        updateCache('recentlyViewed', updatedRecent);
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Error tracking product view:', error);
-        }
-      }
-    },
-    [cache.recentlyViewed, updateCache]
-  );
-
   const addToCart = useCallback(async (productId) => {
     const userToken = localStorage.getItem('token');
     if (!userToken) {

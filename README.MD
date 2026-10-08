@@ -281,7 +281,6 @@ starkkkk
 │  │  ├─ useraxios.js
 │  │  └─ utils
 │  │     └─ authUtils.js
-│  ├─ stats.html
 │  ├─ tailwind.config.js
 │  ├─ tsconfig.json
 │  └─ vite.config.js

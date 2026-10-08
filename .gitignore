@@ -1,2 +1,10 @@
 node_modules
 .env
+.env.*
+!.env.example
+dist
+build
+*.log
+npm-debug.log*
+client_vite_*.txt
+.DS_Store

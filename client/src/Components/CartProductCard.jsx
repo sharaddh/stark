@@ -30,35 +30,25 @@ const CartProductCard = React.memo(
     const [imageError, setImageError] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    // Validate item
-    if (!item || !item.productId) {
-      console.warn('Invalid item:', item);
-      return (
-        <div className="w-full h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">
-          Invalid or Missing Item
-        </div>
-      );
-    }
-
+    // Hooks must run before any early return, so destructure defensively first.
     const {
       productId,
       name = 'Unnamed Product',
       price = 0,
       quantity = 1,
       size = 'N/A',
+      color = '',
       image = null,
       stock = 0,
       discount = 0,
       sizes = ['S', 'M', 'L'],
-    } = item;
+    } = item || {};
 
     // Memoized values
     const displayImage = useMemo(() => {
-      const img = image ? image.replace(/^http:/, 'https:') : placeholderImage;
-      console.log('CartProductCard - Item:', { productId, name, image });
-      console.log('CartProductCard - Display image:', img);
-      return img;
-    }, [image, productId, name]);
+      if (!image) return placeholderImage;
+      return image.replace(/^http:/, 'https:');
+    }, [image]);
     const originalPrice = useMemo(
       () => (discount > 0 ? (price / (1 - discount / 100)).toFixed(2) : price.toFixed(2)),
       [price, discount]
@@ -81,7 +71,7 @@ const CartProductCard = React.memo(
         }
         setIsUpdating(true);
         try {
-          await onUpdateQuantity(productId, newQuantity, size, item.color);
+          await onUpdateQuantity(productId, newQuantity, size, color);
           toast.success(`Updated quantity to ${newQuantity}`);
         } catch (error) {
           console.error('Update quantity error:', error.response?.data || error.message);
@@ -90,7 +80,7 @@ const CartProductCard = React.memo(
           setIsUpdating(false);
         }
       },
-      [productId, size, item.color, onUpdateQuantity]
+      [productId, size, color, onUpdateQuantity]
     );
 
     const handleSizeChange = useCallback(
@@ -104,7 +94,7 @@ const CartProductCard = React.memo(
         }
         setIsUpdating(true);
         try {
-          await onUpdateQuantity(productId, quantity, newSize, item.color);
+          await onUpdateQuantity(productId, quantity, newSize, color);
           toast.success(`Updated size to ${newSize}`);
         } catch (error) {
           console.error('Update size error:', error.response?.data || error.message);
@@ -113,7 +103,7 @@ const CartProductCard = React.memo(
           setIsUpdating(false);
         }
       },
-      [productId, quantity, sizes, item.color, onUpdateQuantity]
+      [productId, quantity, sizes, color, onUpdateQuantity]
     );
 
     const handleRemove = useCallback(
@@ -122,7 +112,7 @@ const CartProductCard = React.memo(
         e.stopPropagation();
         setIsUpdating(true);
         try {
-          await onRemove(productId, size, item.color);
+          await onRemove(productId, size, color);
           toast.success(`${name} removed from ${isSavedForLater ? 'wishlist' : 'cart'}!`);
         } catch (error) {
           console.error('Remove item error:', error.response?.data || error.message);
@@ -131,7 +121,7 @@ const CartProductCard = React.memo(
           setIsUpdating(false);
         }
       },
-      [productId, size, item.color, name, isSavedForLater, onRemove]
+      [productId, size, color, name, isSavedForLater, onRemove]
     );
 
     const handleSaveForLater = useCallback(
@@ -140,7 +130,7 @@ const CartProductCard = React.memo(
         e.stopPropagation();
         setIsUpdating(true);
         try {
-          await onSaveForLater(productId, quantity, size, item.color);
+          await onSaveForLater(productId, quantity, size, color);
           toast.success(`${name} ${isSavedForLater ? 'moved to cart' : 'moved to wishlist'}!`);
         } catch (error) {
           console.error('Move to wishlist error:', error.response?.data || error.message);
@@ -149,7 +139,7 @@ const CartProductCard = React.memo(
           setIsUpdating(false);
         }
       },
-      [productId, quantity, size, item.color, name, isSavedForLater, onSaveForLater]
+      [productId, quantity, size, color, name, isSavedForLater, onSaveForLater]
     );
 
     const handleProductClick = useCallback(() => {
@@ -157,6 +147,15 @@ const CartProductCard = React.memo(
         navigate(`/products/${productId}`);
       }
     }, [productId, navigate]);
+
+    // All hooks above; validate the item before rendering.
+    if (!item || !item.productId) {
+      return (
+        <div className="w-full h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">
+          Invalid or Missing Item
+        </div>
+      );
+    }
 
     return (
       <motion.div

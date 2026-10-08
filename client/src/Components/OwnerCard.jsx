@@ -17,10 +17,12 @@ const OwnerCard = ({ owner }) => {
     >
       <div className="w-16 h-16 rounded-full bg-white shadow-md flex items-center justify-center">
         <img
-          src={sel.profilePicture}
-          alt={owner.username}
+          src={owner.profilePicture}
+          alt={owner.username || owner.name || 'Seller'}
           className="w-full h-full rounded-full object-cover"
-          onError={(e) => (e.target.src = '/path/to/placeholder.png')}
+          onError={(e) => {
+            e.target.src = '/logo192.png';
+          }}
         />
       </div>
       <h3 className="text-sm font-medium text-gray-800">{owner.username}</h3>

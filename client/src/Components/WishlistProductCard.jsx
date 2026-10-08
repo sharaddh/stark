@@ -40,16 +40,6 @@ const WishlistProductCard = React.memo(({ product = {}, onRemove = () => {}, onM
   const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
 
-  // Validate product
-  if (!product || !product.productId) {
-    console.warn('Invalid product:', product);
-    return (
-      <div className="w-full h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">
-        Invalid or Missing Product
-      </div>
-    );
-  }
-
   // Memoize product data to prevent unnecessary recalculations
   const productData = useMemo(() => ({
     productId: product.productId,
@@ -206,6 +196,15 @@ const WishlistProductCard = React.memo(({ product = {}, onRemove = () => {}, onM
       navigate(`/products/${productData.productId}`);
     }
   }, [productData.productId, navigate]);
+
+  // All hooks above; validate the product before rendering.
+  if (!product || !product.productId) {
+    return (
+      <div className="w-full h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">
+        Invalid or Missing Product
+      </div>
+    );
+  }
 
   return (
     <>

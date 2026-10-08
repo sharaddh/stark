@@ -1,10 +1,11 @@
 import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { DataContext } from '../../DataProvider';
 import axios from '../useraxios';
 import Cookies from 'js-cookie';
 import ProductCard from '../ProductCard4line';
+import toast from 'react-hot-toast';
 
 const DEFAULT_PRODUCT_IMAGE = 'https://res.cloudinary.com/your-cloud/image/upload/v123/default-product.jpg';
 const fadeIn = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };

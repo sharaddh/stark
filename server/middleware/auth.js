@@ -49,6 +49,13 @@ const authenticateToken = async (req, res, next) => {
     if (!seller) {
       return res.status(404).json({ success: false, message: 'Seller not found' });
     }
+    // An admin-disabled seller must lose API access immediately, not just UI access.
+    if (seller.status === 'disabled') {
+      return res.status(403).json({ success: false, message: 'Seller account is disabled' });
+    }
+    if (seller.role !== 'seller') {
+      return res.status(403).json({ success: false, message: 'Not a seller account' });
+    }
 
     req.seller = { id: seller._id, phoneNumber: seller.phoneNumber }; // Consistent with frontend token usage
     next();

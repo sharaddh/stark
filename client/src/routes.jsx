@@ -29,15 +29,15 @@ const CancellationReturn = React.lazy(() => import('./pages/CancellationReturn.j
 // Import route guards
 import ProtectedRoute from './Middleware/Protectedroute.jsx';
 import AdminProtectedRoute from './Middleware/AdminProtectedRoute.jsx';
-// If you have seller auth, import SellerProtectedRoute as well
+import SellerProtectedRoute from './Middleware/SellerProtectedRoute.jsx';
 
 export const routes = [
   { path: '/', element: <Home />, layout: true, navbar: true },
   { path: '/cart', element: <ProtectedRoute><Cart /></ProtectedRoute>, layout: true, navbar: true },
   { path: '/wishlist', element: <ProtectedRoute><WishlistPage /></ProtectedRoute>, layout: true, navbar: true },
   { path: '/dashboard', element: <ProtectedRoute><UserDashboard /></ProtectedRoute>, layout: true, navbar: true },
-  { path: '/seller/products', element: <ProtectedRoute><SellerProducts /></ProtectedRoute>, layout: true, navbar: true },
-  { path: '/seller/orders', element: <ProtectedRoute><SellerOrders /></ProtectedRoute>, layout: true, navbar: true },
+  { path: '/seller/products', element: <SellerProtectedRoute><SellerProducts /></SellerProtectedRoute>, layout: true, navbar: true },
+  { path: '/seller/orders', element: <SellerProtectedRoute><SellerOrders /></SellerProtectedRoute>, layout: true, navbar: true },
   { path: '/order/:orderId', element: <ProtectedRoute><OrderDetails /></ProtectedRoute>, layout: true, navbar: true },
   { path: '/category/:categoryName', element: <WrappedCategoryPage />, layout: true, navbar: true },
   { path: '/seller/:sellerId', element: <OwnerProfilePage />, layout: true, navbar: true },
@@ -55,7 +55,7 @@ export const routes = [
   { path: '/Shipping&Delivery', element: <ShippingDelivery />, layout: true, navbar: true },
   { path: '/login', element: <LoginRegister />, layout: false },
   { path: '/seller/login', element: <SellerAuth />, layout: false },
-  { path: '/seller/dashboard', element: <ProtectedRoute><SellerDashboard /></ProtectedRoute>, layout: false },
+  { path: '/seller/dashboard', element: <SellerProtectedRoute><SellerDashboard /></SellerProtectedRoute>, layout: false },
   { path: '/admin/login', element: <AdminAuth />, layout: false },
   { path: '/admin/dashboard', element: <AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>, layout: false },
 ];
